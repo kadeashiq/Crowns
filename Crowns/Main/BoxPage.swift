@@ -55,7 +55,7 @@ struct BoxCanvas<MenuContent: View>: View {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, Space.md)
             .padding(.top, Space.xxs)
-            .padding(.bottom, 112)
+            .padding(.bottom, Space.md)
 
             if watches.isEmpty {
                 Text("No watches in this box yet")
@@ -96,7 +96,7 @@ struct WatchListView<MenuContent: View>: View {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, Space.md)
             .padding(.top, Space.xxs)
-            .padding(.bottom, 112)
+            .padding(.bottom, Space.md)
         }
         .scrollIndicators(.hidden)
     }

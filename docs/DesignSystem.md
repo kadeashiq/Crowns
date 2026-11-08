@@ -48,7 +48,7 @@ System font on Dynamic Type: `display`, `title`, `heading`, `body`, `button`, `l
 | `CardButtonStyle` | `Buttons.swift` | A whole card as a button |
 | `Card`, `FormSection`, `ValueRow`, `RowDivider` | `Components.swift` | Grouped content |
 | `Chip`, `IconSegments` | `Components.swift` | The black selection slides between options |
-| `CountStepper`, `.filledField()`, `SheetHeader` | `Components.swift` | Forms and sheets |
+| `CountStepper`, `.filledField()`, `SheetHeader`, `SkeletonBar` | `Components.swift` | Forms and sheets |
 | `WatchImage`, `WatchGrid`, `WatchCell` | `Shared/Box/` | Photos fill their containers, edge to edge |
 
 ## Motion (`Motion`)
@@ -61,4 +61,6 @@ Screens change through native SwiftUI sheets and nothing else: no custom fades, 
 - The grid only ever shows watches. No empty slots or placeholders.
 - No colour for meaning. System confirmation dialogs are the only red.
 - Sheets have a swipe indicator and no close button.
+- Buttons pinned to an edge use `.fadingBar(_:)`: content scrolls under a soft fade, never a solid bar.
+- Anything loading shows a native spinner, says what it's doing, and holds its layout with grey placeholders.
 - Pick a token. If none fits, add one here first.

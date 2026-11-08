@@ -26,41 +26,46 @@ struct AddWatchSheet: View {
     // MARK: - Main
 
     private var content: some View {
-        VStack(spacing: 0) {
-            if model.isExtension {
-                // Extensions don't get the system's indicator.
-                Capsule()
-                    .fill(Theme.inkTertiary.opacity(0.4))
-                    .frame(width: 36, height: 5)
-                    .padding(.top, 5)
+        ScrollView {
+            VStack(spacing: 0) {
+                carousel
+                    .frame(height: 280)
+                    .padding(.horizontal, -(Space.lg - 4))
+                photoChooser
+                fields
+                    .padding(.top, Space.md)
+                boxPicker
+                    .padding(.top, Space.md)
             }
-            SheetHeader(title: "Add watch")
-            ScrollView {
-                VStack(spacing: 0) {
-                    carousel
-                        .frame(height: 280)
-                        .padding(.horizontal, -(Space.lg - 4))
-                    photoChooser
-                    fields
-                        .padding(.top, Space.md)
-                    boxPicker
-                        .padding(.top, Space.md)
+            .padding(.horizontal, Space.lg - 4)
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .fadingBar(.top) {
+            VStack(spacing: 0) {
+                if model.isExtension {
+                    // Extensions don't get the system's indicator.
+                    Capsule()
+                        .fill(Theme.inkTertiary.opacity(0.4))
+                        .frame(width: 36, height: 5)
+                        .padding(.top, 5)
                 }
-                .padding(.horizontal, Space.lg - 4)
+                SheetHeader(title: "Add watch")
             }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
-            if !model.errorText.isEmpty {
-                Text(model.errorText)
-                    .font(Typeface.caption)
-                    .foregroundStyle(Theme.ink)
-                    .padding(.top, Space.xs)
-            }
+        }
+        .fadingBar(.bottom) {
             // While typing, the keyboard's Done takes its place.
             if focus == nil {
-                saveButton
-                    .padding(.horizontal, Space.lg - 4)
-                    .padding(.vertical, Space.sm)
+                VStack(spacing: Space.xs) {
+                    if !model.errorText.isEmpty {
+                        Text(model.errorText)
+                            .font(Typeface.caption)
+                            .foregroundStyle(Theme.ink)
+                    }
+                    saveButton
+                }
+                .padding(.horizontal, Space.lg - 4)
+                .padding(.bottom, Space.sm)
             }
         }
     }
@@ -70,11 +75,7 @@ struct AddWatchSheet: View {
     @ViewBuilder
     private var carousel: some View {
         if model.photos.isEmpty {
-            Theme.well.overlay {
-                if model.photosLoading {
-                    ProgressView().tint(Theme.inkSecondary)
-                }
-            }
+            Theme.hairline.overlay { photoStatus }
         } else {
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
@@ -95,18 +96,53 @@ struct AddWatchSheet: View {
         }
     }
 
+    @ViewBuilder
+    private var photoStatus: some View {
+        VStack(spacing: Space.sm) {
+            if let message = model.loadingMessage {
+                ProgressView()
+                    .controlSize(.large)
+                    .tint(Theme.inkSecondary)
+                Text(message)
+                    .font(Typeface.label)
+                    .foregroundStyle(Theme.inkSecondary)
+            } else {
+                Image(systemName: "photo")
+                    .font(Typeface.title)
+                    .foregroundStyle(Theme.inkTertiary)
+                Text(model.foundNothing ? "Couldn't read this page" : "No photos found")
+                    .font(Typeface.label)
+                    .foregroundStyle(Theme.ink)
+                if model.foundNothing {
+                    Text("Add the details yourself below.")
+                        .font(Typeface.caption)
+                        .foregroundStyle(Theme.inkSecondary)
+                }
+            }
+        }
+    }
+
     /// Picks the one photo to save. Swiping the carousel does the same.
     @ViewBuilder
     private var photoChooser: some View {
-        if model.photos.count > 1 {
+        if model.photos.count > 1 || model.loadingMessage != nil {
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text("Pick your cover photo")
                     .font(Typeface.label)
                     .foregroundStyle(Theme.inkSecondary)
                 ScrollView(.horizontal) {
                     HStack(spacing: Space.xs) {
-                        ForEach(Array(model.photos.enumerated()), id: \.element.id) { index, photo in
-                            thumbnail(photo, number: index + 1)
+                        if model.photos.isEmpty {
+                            ForEach(0..<6, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                                    .fill(Theme.hairline)
+                                    .frame(width: 52, height: 52)
+                                    .padding(3)
+                            }
+                        } else {
+                            ForEach(Array(model.photos.enumerated()), id: \.element.id) { index, photo in
+                                thumbnail(photo, number: index + 1)
+                            }
                         }
                     }
                 }
@@ -154,11 +190,11 @@ struct AddWatchSheet: View {
     private var fields: some View {
         Card(padding: Space.xs + 2) {
             VStack(spacing: Space.xs) {
-                row("Brand", text: $model.brand, focus: .brand)
-                row("Model", text: $model.model, focus: .model)
-                row("Reference", text: $model.reference, focus: .reference)
+                row("Brand", text: $model.brand, focus: .brand, skeletonWidth: 90)
+                row("Model", text: $model.model, focus: .model, skeletonWidth: 150)
+                row("Reference", text: $model.reference, focus: .reference, skeletonWidth: 110)
                     .autocorrectionDisabled()
-                row("Price", text: $model.priceText, focus: .price, prefix: "£")
+                row("Price", text: $model.priceText, focus: .price, prefix: "£", skeletonWidth: 70)
                     .keyboardType(.decimalPad)
                 if !model.priceNote.isEmpty {
                     Text(model.priceNote)
@@ -180,8 +216,6 @@ struct AddWatchSheet: View {
         }
         .textInputAutocapitalization(.words)
         .disabled(model.stage == .reading)
-        .opacity(model.stage == .reading ? 0.4 : 1)
-        .redacted(reason: model.stage == .reading ? .placeholder : [])
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -190,14 +224,19 @@ struct AddWatchSheet: View {
         }
     }
 
-    private func row(_ title: String, text: Binding<String>, focus field: Field, prefix: String? = nil) -> some View {
+    private func row(_ title: String, text: Binding<String>, focus field: Field, prefix: String? = nil, skeletonWidth: CGFloat) -> some View {
         HStack(spacing: Space.sm) {
             rowLabel(title)
-            if let prefix {
-                Text(prefix).foregroundStyle(Theme.inkSecondary)
+            if model.stage == .reading {
+                SkeletonBar(width: skeletonWidth)
+                Spacer(minLength: 0)
+            } else {
+                if let prefix {
+                    Text(prefix).foregroundStyle(Theme.inkSecondary)
+                }
+                TextField(title, text: text)
+                    .focused($focus, equals: field)
             }
-            TextField(title, text: text)
-                .focused($focus, equals: field)
         }
         .filledField()
     }
@@ -237,15 +276,26 @@ struct AddWatchSheet: View {
             focus = nil
             Task { await model.save() }
         } label: {
-            ZStack {
-                Text("Save").opacity(model.stage == .saved ? 0 : 1)
-                Label("Saved", systemImage: "checkmark")
-                    .opacity(model.stage == .saved ? 1 : 0)
-            }
-            .frame(maxWidth: .infinity)
+            saveLabel
+                .frame(maxWidth: .infinity)
         }
         .buttonStyle(.pill())
-        .disabled(model.stage == .reading || model.stage == .saving)
+        .disabled(!model.canSave && model.stage != .saved)
+    }
+
+    @ViewBuilder
+    private var saveLabel: some View {
+        switch model.stage {
+        case .saving:
+            HStack(spacing: Space.xs) {
+                ProgressView().tint(Theme.onInk)
+                Text("Saving")
+            }
+        case .saved:
+            Label("Saved", systemImage: "checkmark")
+        default:
+            Text(model.loadingMessage == nil ? "Save" : "Loading…")
+        }
     }
 }
 

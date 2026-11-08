@@ -7,19 +7,19 @@ struct BoxOrderSheet: View {
     @Query(sort: [SortDescriptor(\Box.sortIndex), SortDescriptor(\Box.createdAt)]) private var boxes: [Box]
 
     var body: some View {
-        VStack(spacing: 0) {
-            SheetHeader(title: "Box order")
-            List {
-                ForEach(boxes) { box in
-                    Text(box.name)
-                        .font(Typeface.body)
-                        .foregroundStyle(Theme.ink)
-                        .listRowBackground(Theme.surface)
-                }
-                .onMove(perform: move)
+        List {
+            ForEach(boxes) { box in
+                Text(box.name)
+                    .font(Typeface.body)
+                    .foregroundStyle(Theme.ink)
+                    .listRowBackground(Theme.surface)
             }
-            .scrollContentBackground(.hidden)
-            .environment(\.editMode, .constant(.active))
+            .onMove(perform: move)
+        }
+        .scrollContentBackground(.hidden)
+        .environment(\.editMode, .constant(.active))
+        .fadingBar(.top) {
+            SheetHeader(title: "Box order")
         }
         .background(Theme.canvas)
     }

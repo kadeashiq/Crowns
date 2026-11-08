@@ -14,19 +14,19 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                SheetHeader(title: "Settings")
-                ScrollView {
-                    VStack(spacing: Space.lg) {
-                        boxesSection
-                        iCloudSection
-                        aboutSection
-                    }
-                    .padding(.horizontal, Space.md)
-                    .padding(.top, Space.xs)
-                    .padding(.bottom, Space.xl)
+            ScrollView {
+                VStack(spacing: Space.lg) {
+                    boxesSection
+                    iCloudSection
+                    aboutSection
                 }
-                .scrollIndicators(.hidden)
+                .padding(.horizontal, Space.md)
+                .padding(.top, Space.xs)
+                .padding(.bottom, Space.xl)
+            }
+            .scrollIndicators(.hidden)
+            .fadingBar(.top) {
+                SheetHeader(title: "Settings")
             }
             .background(Theme.canvas)
             .toolbar(.hidden, for: .navigationBar)

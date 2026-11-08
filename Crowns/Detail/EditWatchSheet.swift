@@ -24,7 +24,58 @@ struct EditWatchSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+
+        ScrollView {
+            VStack(spacing: Space.lg) {
+                FormSection(title: "Watch") {
+                    VStack(spacing: Space.xs) {
+                        TextField("Brand", text: $brand).filledField()
+                        TextField("Model", text: $model).filledField()
+                        TextField("Reference", text: $reference)
+                            .filledField()
+                            .font(.body.monospaced())
+                    }
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                }
+
+                FormSection(title: "Price", footer: watch.priceNote) {
+                    HStack(spacing: 4) {
+                        Text("£").foregroundStyle(Theme.inkSecondary)
+                        TextField("Price", text: $price).keyboardType(.decimalPad)
+                    }
+                    .filledField()
+                }
+
+                let photos = watch.sortedPhotos
+                if photos.count > 1 {
+                    coverPicker(photos)
+                }
+
+                specsSection
+
+                FormSection(title: "Notes") {
+                    TextField("Notes", text: $notes, axis: .vertical)
+                        .lineLimit(3...10)
+                        .padding(.vertical, Space.sm)
+                        .filledField()
+                }
+
+                FormSection(title: "Source") {
+                    TextField("Link", text: $source)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .filledField()
+                }
+            }
+            .padding(.horizontal, Space.md)
+            .padding(.top, Space.xs)
+            .padding(.bottom, Space.xl)
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .fadingBar(.top) {
             SheetHeader(title: "Edit") {
                 if working {
                     ProgressView().frame(width: 72, height: 40)
@@ -33,57 +84,6 @@ struct EditWatchSheet: View {
                         .buttonStyle(.pill(.primary, size: .small))
                 }
             }
-
-            ScrollView {
-                VStack(spacing: Space.lg) {
-                    FormSection(title: "Watch") {
-                        VStack(spacing: Space.xs) {
-                            TextField("Brand", text: $brand).filledField()
-                            TextField("Model", text: $model).filledField()
-                            TextField("Reference", text: $reference)
-                                .filledField()
-                                .font(.body.monospaced())
-                        }
-                        .textInputAutocapitalization(.words)
-                        .autocorrectionDisabled()
-                    }
-
-                    FormSection(title: "Price", footer: watch.priceNote) {
-                        HStack(spacing: 4) {
-                            Text("£").foregroundStyle(Theme.inkSecondary)
-                            TextField("Price", text: $price).keyboardType(.decimalPad)
-                        }
-                        .filledField()
-                    }
-
-                    let photos = watch.sortedPhotos
-                    if photos.count > 1 {
-                        coverPicker(photos)
-                    }
-
-                    specsSection
-
-                    FormSection(title: "Notes") {
-                        TextField("Notes", text: $notes, axis: .vertical)
-                            .lineLimit(3...10)
-                            .padding(.vertical, Space.sm)
-                            .filledField()
-                    }
-
-                    FormSection(title: "Source") {
-                        TextField("Link", text: $source)
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .filledField()
-                    }
-                }
-                .padding(.horizontal, Space.md)
-                .padding(.top, Space.xs)
-                .padding(.bottom, Space.xl)
-            }
-            .scrollIndicators(.hidden)
-            .scrollDismissesKeyboard(.interactively)
         }
         .background(Theme.canvas)
         .onAppear(perform: load)

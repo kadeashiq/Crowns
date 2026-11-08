@@ -33,35 +33,35 @@ struct MainView: View {
         ZStack {
             Theme.canvas.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                BoxChips(
-                    boxes: boxes,
-                    selectedID: selectedBox?.id,
-                    onSelect: select,
-                    onAdd: { editingBox = BoxEditRequest(box: nil) },
-                    onEdit: { editingBox = BoxEditRequest(box: $0) },
-                    onReorder: { showBoxOrder = true }
-                )
-
-                ZStack {
-                    if let box = selectedBox {
-                        BoxPage(
-                            box: box,
-                            mode: mode,
-                            onOpen: open,
-                            onMove: move,
-                            onRemove: remove
-                        )
-                        // New identity per external save, to re-run queries.
-                        .id("\(box.id.uuidString)|\(refreshID.uuidString)")
-                    }
+            ZStack {
+                if let box = selectedBox {
+                    BoxPage(
+                        box: box,
+                        mode: mode,
+                        onOpen: open,
+                        onMove: move,
+                        onRemove: remove
+                    )
+                    // New identity per external save, to re-run queries.
+                    .id("\(box.id.uuidString)|\(refreshID.uuidString)")
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .simultaneousGesture(boxSwipe)
             }
-
-            addButton
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .simultaneousGesture(boxSwipe)
+            .fadingBar(.top) {
+                VStack(spacing: 0) {
+                    header
+                    BoxChips(
+                        boxes: boxes,
+                        selectedID: selectedBox?.id,
+                        onSelect: select,
+                        onAdd: { editingBox = BoxEditRequest(box: nil) },
+                        onEdit: { editingBox = BoxEditRequest(box: $0) },
+                        onReorder: { showBoxOrder = true }
+                    )
+                }
+            }
+            .fadingBar(.bottom) { addButton }
         }
         .sheet(item: $focused, onDismiss: detailClosed) { watch in
             WatchDetailView(watch: watch, onMove: move, onRemove: remove)
@@ -135,18 +135,15 @@ struct MainView: View {
     }
 
     private var addButton: some View {
-        VStack {
-            Spacer()
-            Button {
-                guard let box = selectedBox else { return }
-                adding = AddRequest(boxID: box.id)
-            } label: {
-                Image(systemName: "plus")
-            }
-            .buttonStyle(.circle(.primary, diameter: 64))
-            .accessibilityLabel("Add watch")
-            .padding(.bottom, Space.xs)
+        Button {
+            guard let box = selectedBox else { return }
+            adding = AddRequest(boxID: box.id)
+        } label: {
+            Image(systemName: "plus")
         }
+        .buttonStyle(.circle(.primary, diameter: 64))
+        .accessibilityLabel("Add watch")
+        .padding(.bottom, Space.xs)
     }
 
     // MARK: - Boxes

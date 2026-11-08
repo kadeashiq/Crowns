@@ -18,46 +18,46 @@ struct BoxEditorSheet: View {
     private var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
-        VStack(spacing: 0) {
+
+        ScrollView {
+            VStack(spacing: Space.lg) {
+                FormSection(title: "Name") {
+                    TextField("Name", text: $name)
+                        .textInputAutocapitalization(.words)
+                        .filledField()
+                }
+
+                FormSection(title: "Layout") {
+                    CountStepper(title: "Columns", value: $columns, range: 1...4)
+                }
+
+                if let box, boxes.count > 1 {
+                    VStack(spacing: Space.xs) {
+                        Button("Delete box") { confirmDelete = true }
+                            .buttonStyle(.pill(.secondary))
+                            .disabled(watchCount > 0)
+                        if watchCount > 0 {
+                            Text("Move its watches first.")
+                                .font(Typeface.caption)
+                                .foregroundStyle(Theme.inkTertiary)
+                        }
+                    }
+                    .confirmationDialog("Delete \(box.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                        Button("Delete", role: .destructive) { delete(box) }
+                    }
+                }
+            }
+            .padding(.horizontal, Space.md)
+            .padding(.top, Space.xs)
+            .padding(.bottom, Space.xl)
+        }
+        .scrollIndicators(.hidden)
+        .fadingBar(.top) {
             SheetHeader(title: box == nil ? "New box" : "Edit box") {
                 Button("Save", action: save)
                     .buttonStyle(.pill(.primary, size: .small))
                     .disabled(!canSave)
             }
-
-            ScrollView {
-                VStack(spacing: Space.lg) {
-                    FormSection(title: "Name") {
-                        TextField("Name", text: $name)
-                            .textInputAutocapitalization(.words)
-                            .filledField()
-                    }
-
-                    FormSection(title: "Layout") {
-                        CountStepper(title: "Columns", value: $columns, range: 1...4)
-                    }
-
-                    if let box, boxes.count > 1 {
-                        VStack(spacing: Space.xs) {
-                            Button("Delete box") { confirmDelete = true }
-                                .buttonStyle(.pill(.secondary))
-                                .disabled(watchCount > 0)
-                            if watchCount > 0 {
-                                Text("Move its watches first.")
-                                    .font(Typeface.caption)
-                                    .foregroundStyle(Theme.inkTertiary)
-                            }
-                        }
-                        .confirmationDialog("Delete \(box.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                            Button("Delete", role: .destructive) { delete(box) }
-                        }
-                    }
-                }
-                .padding(.horizontal, Space.md)
-                .padding(.top, Space.xs)
-                .padding(.bottom, Space.xl)
-            }
-            .scrollIndicators(.hidden)
         }
         .background(Theme.canvas)
         .onAppear {

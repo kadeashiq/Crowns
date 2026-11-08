@@ -25,7 +25,7 @@ struct WatchDetailView: View {
         .scrollIndicators(.hidden)
         .ignoresSafeArea(.container, edges: .top)
         .background(Theme.canvas)
-        .safeAreaInset(edge: .bottom) { actions }
+        .fadingBar(.bottom) { actions }
         .sheet(isPresented: $editing) {
             EditWatchSheet(watch: watch)
                 .crownsSheet()
@@ -94,7 +94,7 @@ struct WatchDetailView: View {
                     VStack(spacing: 0) {
                         ForEach(Array(watch.specs.enumerated()), id: \.element.id) { index, spec in
                             if index > 0 { RowDivider() }
-                            ValueRow(title: spec.label, value: spec.value)
+                            SpecRow(spec: spec)
                         }
                     }
                 }
@@ -158,16 +158,25 @@ struct WatchDetailView: View {
         }
         .labelStyle(.titleAndIcon)
         .padding(.horizontal, Space.md)
-        .padding(.top, Space.lg)
         .padding(.bottom, Space.xs)
-        .background {
-            // Content fades out before it reaches the buttons.
-            LinearGradient(
-                stops: [.init(color: Theme.canvas.opacity(0), location: 0), .init(color: Theme.canvas, location: 0.4)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
+    }
+}
+
+/// A label in a fixed column and its value lined up beside it.
+private struct SpecRow: View {
+    let spec: Spec
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.md) {
+            Text(spec.label)
+                .foregroundStyle(Theme.inkSecondary)
+                .frame(width: 132, alignment: .leading)
+            Text(spec.value.prefix(1).uppercased() + spec.value.dropFirst())
+                .foregroundStyle(Theme.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .font(Typeface.secondary)
+        .padding(.horizontal, Space.md)
+        .padding(.vertical, Space.sm + 1)
     }
 }

@@ -52,7 +52,7 @@ struct RowDivider: View {
         Rectangle()
             .fill(Theme.hairline)
             .frame(height: 0.5)
-            .padding(.leading, Space.md)
+            .padding(.horizontal, Space.md)
     }
 }
 
@@ -138,6 +138,50 @@ struct SheetHeader<Trailing: View>: View {
 extension SheetHeader where Trailing == EmptyView {
     init(title: String) {
         self.init(title: title) { EmptyView() }
+    }
+}
+
+/// The page colour, fading to clear away from a screen edge.
+private struct EdgeFade: View {
+    let edge: VerticalEdge
+
+    var body: some View {
+        LinearGradient(
+            stops: [
+                .init(color: Theme.canvas, location: 0),
+                .init(color: Theme.canvas.opacity(0.9), location: 0.6),
+                .init(color: Theme.canvas.opacity(0), location: 1),
+            ],
+            startPoint: edge == .top ? .top : .bottom,
+            endPoint: edge == .top ? .bottom : .top
+        )
+        .ignoresSafeArea(edges: edge == .top ? .top : .bottom)
+        .allowsHitTesting(false)
+    }
+}
+
+extension View {
+    /// Pins buttons to a screen edge, with content scrolling softly beneath
+    /// them. Use this rather than a solid bar.
+    func fadingBar<Bar: View>(_ edge: VerticalEdge, @ViewBuilder bar: () -> Bar) -> some View {
+        scrollEdgeEffectHidden(true, for: edge == .top ? .top : .bottom)
+            .safeAreaInset(edge: edge, spacing: 0) {
+                bar()
+                    .frame(maxWidth: .infinity)
+                    .padding(edge == .top ? .bottom : .top, Space.md)
+                    .background { EdgeFade(edge: edge) }
+            }
+    }
+}
+
+/// A grey bar standing in for text that's still loading.
+struct SkeletonBar: View {
+    var width: CGFloat = 120
+
+    var body: some View {
+        Capsule()
+            .fill(Theme.hairline)
+            .frame(width: width, height: 14)
     }
 }
 

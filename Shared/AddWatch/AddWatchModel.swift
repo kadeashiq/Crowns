@@ -69,7 +69,19 @@ final class AddWatchModel {
         loadBoxes(preferred: boxID)
     }
 
-    var canSave: Bool { stage == .ready }
+    var canSave: Bool { stage == .ready && !photosLoading }
+
+    /// What's being pulled from the page right now, or nil once it's done.
+    var loadingMessage: String? {
+        if stage == .reading { return "Reading the listing…" }
+        if photosLoading { return "Getting the photos…" }
+        return nil
+    }
+
+    /// The page gave us nothing to work with.
+    var foundNothing: Bool {
+        loadingMessage == nil && photos.isEmpty && brand.isEmpty && model.isEmpty
+    }
 
     private func loadBoxes(preferred: UUID?) {
         BoxSeeder.ensureDefaults(in: context)
