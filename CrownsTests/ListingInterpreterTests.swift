@@ -95,14 +95,19 @@ struct ListingInterpreterTests {
         #expect(d.model == "GMT-Master II Pepsi")
     }
 
+    struct ModelCase: Sendable, CustomTestStringConvertible {
+        let title, brand, reference, expected: String
+        var testDescription: String { title }
+    }
+
     @Test(arguments: [
-        ("Tudor Black Bay 58 M79030N-0001", "Tudor", "M79030N-0001", "Black Bay 58"),
-        ("Omega Seamaster Aqua Terra 150M 41mm Blue Dial", "Omega", "", "Seamaster Aqua Terra 150M"),
-        ("Rolex Oyster Perpetual 41 124300 Green Dial Box Papers", "Rolex", "124300", "Oyster Perpetual 41"),
-        ("Cartier Santos de Cartier Large WSSA0018", "Cartier", "WSSA0018", "Santos de Cartier Large"),
+        ModelCase(title: "Tudor Black Bay 58 M79030N-0001", brand: "Tudor", reference: "M79030N-0001", expected: "Black Bay 58"),
+        ModelCase(title: "Omega Seamaster Aqua Terra 150M 41mm Blue Dial", brand: "Omega", reference: "", expected: "Seamaster Aqua Terra 150M"),
+        ModelCase(title: "Rolex Oyster Perpetual 41 124300 Green Dial Box Papers", brand: "Rolex", reference: "124300", expected: "Oyster Perpetual 41"),
+        ModelCase(title: "Cartier Santos de Cartier Large WSSA0018", brand: "Cartier", reference: "WSSA0018", expected: "Santos de Cartier Large"),
     ])
-    func deriveModel(title: String, brand: String, reference: String, expected: String) {
-        #expect(ListingInterpreter.deriveModel(from: title, brand: brand, reference: reference) == expected)
+    func deriveModel(_ c: ModelCase) {
+        #expect(ListingInterpreter.deriveModel(from: c.title, brand: c.brand, reference: c.reference) == c.expected)
     }
 
     @Test func cleanTitle() {
@@ -113,20 +118,28 @@ struct ListingInterpreterTests {
 
 @Suite("Price parser")
 struct PriceParserTests {
+    struct PriceCase: Sendable, CustomTestStringConvertible {
+        let text: String
+        let fallback: String?
+        let amount: String
+        let currency: String
+        var testDescription: String { text }
+    }
+
     @Test(arguments: [
-        ("£12,950.00", nil, "12950", "GBP"),
-        ("US $4,250.00", nil, "4250", "USD"),
-        ("€ 2.300,00", nil, "2300", "EUR"),
-        ("CHF 8'900.–", nil, "8900", "CHF"),
-        ("3150.0", "GBP", "3150", "GBP"),
-        ("1.650", "EUR", "1650", "EUR"),
-        ("£3,150.00 GBP", nil, "3150", "GBP"),
-        ("12 950 €", nil, "12950", "EUR"),
-        ("From £1,000 - £2,000", nil, "1000", "GBP"),
-        ("£949.99", nil, "949.99", "GBP"),
-    ] as [(String, String?, String, String)])
-    func parses(text: String, fallback: String?, amount: String, currency: String) {
-        #expect(PriceParser.parse(text, fallbackCurrency: fallback) == Money(amount: Decimal(string: amount)!, currency: currency))
+        PriceCase(text: "£12,950.00", fallback: nil, amount: "12950", currency: "GBP"),
+        PriceCase(text: "US $4,250.00", fallback: nil, amount: "4250", currency: "USD"),
+        PriceCase(text: "€ 2.300,00", fallback: nil, amount: "2300", currency: "EUR"),
+        PriceCase(text: "CHF 8'900.–", fallback: nil, amount: "8900", currency: "CHF"),
+        PriceCase(text: "3150.0", fallback: "GBP", amount: "3150", currency: "GBP"),
+        PriceCase(text: "1.650", fallback: "EUR", amount: "1650", currency: "EUR"),
+        PriceCase(text: "£3,150.00 GBP", fallback: nil, amount: "3150", currency: "GBP"),
+        PriceCase(text: "12 950 €", fallback: nil, amount: "12950", currency: "EUR"),
+        PriceCase(text: "From £1,000 - £2,000", fallback: nil, amount: "1000", currency: "GBP"),
+        PriceCase(text: "£949.99", fallback: nil, amount: "949.99", currency: "GBP"),
+    ])
+    func parses(_ c: PriceCase) {
+        #expect(PriceParser.parse(c.text, fallbackCurrency: c.fallback) == Money(amount: Decimal(string: c.amount)!, currency: c.currency))
     }
 
     @Test func needsACurrency() {

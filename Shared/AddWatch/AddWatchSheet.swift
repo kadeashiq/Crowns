@@ -23,8 +23,8 @@ struct AddWatchSheet: View {
                 ScrollView {
                     PaywallView(
                         store: model.store,
-                        onFinish: { subscribed in Task { await model.paywallFinished(subscribed) } },
-                        onCannotPurchase: model.isExtension ? { Task { await model.handOffToApp() } } : nil
+                        onFinish: { subscribed in _ = Task { await model.paywallFinished(subscribed) } },
+                        onCannotPurchase: handOff
                     )
                 }
                 .transition(.opacity)
@@ -36,6 +36,12 @@ struct AddWatchSheet: View {
         }
         .background(ViewAnchor { model.hostView = $0 })
         .animation(Motion.standard, value: model.stage)
+    }
+
+    /// In the extension, a purchase that can't finish hands the watch to the app.
+    private var handOff: (() -> Void)? {
+        guard model.isExtension else { return nil }
+        return { _ = Task { await model.handOffToApp() } }
     }
 
     // MARK: - Main

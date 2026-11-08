@@ -9,9 +9,12 @@ struct SeededRandom {
 
     init(uuid: UUID) {
         let u = uuid.uuid
-        let a = UInt64(u.0) | UInt64(u.1) << 8 | UInt64(u.2) << 16 | UInt64(u.3) << 24
-        let b = UInt64(u.4) << 32 | UInt64(u.5) << 40 | UInt64(u.6) << 48 | UInt64(u.7) << 56
-        self.init(a | b)
+        let bytes: [UInt8] = [u.0, u.1, u.2, u.3, u.4, u.5, u.6, u.7]
+        var seed: UInt64 = 0
+        for (i, byte) in bytes.enumerated() {
+            seed |= UInt64(byte) << UInt64(i * 8)
+        }
+        self.init(seed)
     }
 
     /// SplitMix64.

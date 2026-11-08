@@ -1,6 +1,7 @@
 import Foundation
 import CoreData
 import CloudKit
+import Observation
 
 /// Watches iCloud: whether the account is usable, and the import/export
 /// events SwiftData's CloudKit mirroring reports.
