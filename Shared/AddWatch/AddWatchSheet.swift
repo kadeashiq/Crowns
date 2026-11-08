@@ -288,7 +288,7 @@ struct AddWatchSheet: View {
         switch model.stage {
         case .saving:
             HStack(spacing: Space.xs) {
-                ProgressView().tint(Theme.onInk)
+                ProgressView().tint(Theme.inkTertiary)
                 Text("Saving")
             }
         case .saved:

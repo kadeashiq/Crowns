@@ -17,6 +17,7 @@ struct MainView: View {
     @AppStorage("viewMode") private var mode: ViewMode = .box
     @AppStorage("selectedBoxID") private var selectedBoxRaw = ""
     @State private var focused: Watch?
+    @State private var watchToRemove: Watch?
     @State private var afterDetailCloses: (() -> Void)?
     @State private var adding: AddRequest?
     @State private var editingBox: BoxEditRequest?
@@ -40,7 +41,7 @@ struct MainView: View {
                         mode: mode,
                         onOpen: open,
                         onMove: move,
-                        onRemove: remove
+                        onRemove: { watchToRemove = $0 }
                     )
                     // New identity per external save, to re-run queries.
                     .id("\(box.id.uuidString)|\(refreshID.uuidString)")
@@ -62,6 +63,14 @@ struct MainView: View {
                 }
             }
             .fadingBar(.bottom) { addButton }
+        }
+        .confirmationDialog(
+            "Are you sure you want to remove this watch?",
+            isPresented: Binding(get: { watchToRemove != nil }, set: { if !$0 { watchToRemove = nil } }),
+            titleVisibility: .visible,
+            presenting: watchToRemove
+        ) { watch in
+            Button("Remove", role: .destructive) { remove(watch) }
         }
         .sheet(item: $focused, onDismiss: detailClosed) { watch in
             WatchDetailView(watch: watch, onMove: move, onRemove: remove)

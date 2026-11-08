@@ -24,12 +24,19 @@ struct PillButtonStyle: ButtonStyle {
             }
             .contentShape(.capsule)
             .scaleEffect(pressed ? 0.97 : 1)
-            .opacity(isEnabled ? (kind == .quiet && pressed ? 0.5 : 1) : 0.4)
+            .opacity(kind == .quiet && pressed ? 0.5 : 1)
             .animation(Motion.press, value: pressed)
     }
 
-    private var fill: Color { kind == .primary ? Theme.ink : Theme.surface }
-    private var foreground: Color { kind == .primary ? Theme.onInk : Theme.ink }
+    // Disabled is solid grey, not faded, because content can scroll beneath.
+    private var fill: Color {
+        guard isEnabled else { return Theme.hairline }
+        return kind == .primary ? Theme.ink : Theme.surface
+    }
+    private var foreground: Color {
+        guard isEnabled else { return Theme.inkTertiary }
+        return kind == .primary ? Theme.onInk : Theme.ink
+    }
     private var rest: Elevation { kind == .primary ? .mid : .low }
 }
 
@@ -46,23 +53,30 @@ struct CircleButtonStyle: ButtonStyle {
         let pressed = configuration.isPressed
         configuration.label
             .font(.system(size: diameter * 0.36, weight: .semibold))
-            .foregroundStyle(kind == .primary ? Theme.onInk : Theme.ink)
+            .foregroundStyle(foreground)
             .frame(width: diameter, height: diameter)
             .background {
                 if kind == .flat {
                     Circle().fill(Theme.well)
                 } else {
                     Circle()
-                        .fill(kind == .primary ? Theme.ink : Theme.surface)
+                        .fill(fill)
                         .elevation(pressed || !isEnabled ? .flat : rest)
                 }
             }
             .contentShape(.circle)
             .scaleEffect(pressed ? 0.9 : 1)
-            .opacity(isEnabled ? 1 : 0.4)
             .animation(Motion.press, value: pressed)
     }
 
+    private var fill: Color {
+        guard isEnabled else { return Theme.hairline }
+        return kind == .primary ? Theme.ink : Theme.surface
+    }
+    private var foreground: Color {
+        guard isEnabled else { return Theme.inkTertiary }
+        return kind == .primary ? Theme.onInk : Theme.ink
+    }
     private var rest: Elevation { kind == .primary ? .high : .low }
 }
 

@@ -30,7 +30,7 @@ struct WatchDetailView: View {
             EditWatchSheet(watch: watch)
                 .crownsSheet()
         }
-        .confirmationDialog("Remove this watch?", isPresented: $confirmRemove, titleVisibility: .visible) {
+        .confirmationDialog("Are you sure you want to remove this watch?", isPresented: $confirmRemove, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { onRemove(watch) }
         }
     }
