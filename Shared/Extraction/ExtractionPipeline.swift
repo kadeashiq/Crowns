@@ -7,6 +7,9 @@ import UIKit
 /// 2. Otherwise, load the URL in a hidden web view and run the same script.
 /// 3. If the page has no structured product data and we're still thin,
 ///    ask LinkPresentation for a title and image.
+/// 4. Still missing brand, model or price: the on-device Foundation Model
+///    reads the page text.
+/// 5. Convert foreign prices to pounds.
 @MainActor
 enum ExtractionPipeline {
     struct Outcome {
@@ -56,7 +59,24 @@ enum ExtractionPipeline {
                 steps.append("linkpresentation-failed")
             }
         }
-        // Phase 4: Foundation Models fallback over snapshot.text goes here.
+        // On-device model over the page text, for pages the structure missed.
+        if let text = snapshot?.text, text.count > 80,
+           draft.brand.isEmpty || draft.model.isEmpty || (!structured && draft.price == nil) {
+            let before = draft
+            await FoundationModelsFallback.fill(&draft, title: snapshot?.title ?? draft.pageTitle, text: text)
+            steps.append(draft == before ? "foundationmodels-nothing" : "foundationmodels")
+        }
+
+        // Prices are always pounds.
+        if let price = draft.price, !price.isGBP {
+            if let converted = await CurrencyConverter.toGBP(price) {
+                draft.originalPrice = price
+                draft.price = converted
+                steps.append("converted-\(price.currency)")
+            } else {
+                steps.append("no-rate-\(price.currency)")
+            }
+        }
 
         return Outcome(draft: draft, snapshotJSON: json, extraImage: extraImage, steps: steps)
     }

@@ -1,13 +1,6 @@
 import Foundation
 import UniformTypeIdentifiers
 
-struct ShareInput {
-    /// JSON from Preprocess.js, present when shared from Safari.
-    var snapshotJSON: String?
-    /// The page URL. From Safari alongside the snapshot; from other apps alone.
-    var url: URL?
-}
-
 enum ShareInputReader {
     static func read(_ items: [NSExtensionItem]) async -> ShareInput {
         var input = ShareInput()
@@ -34,6 +27,15 @@ enum ShareInputReader {
             input.url = page
         }
         return input
+    }
+
+    /// A web link from pasted items (a URL, or text containing one).
+    static func firstURL(from providers: [NSItemProvider]) async -> URL? {
+        for provider in providers {
+            if let url = await load(.url, from: provider, as: URL.self), isWeb(url) { return url }
+            if let text = await load(.plainText, from: provider, as: String.self), let url = firstLink(in: text) { return url }
+        }
+        return nil
     }
 
     private static func load<T>(_ type: UTType, from provider: NSItemProvider, as _: T.Type) async -> T? {

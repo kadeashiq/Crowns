@@ -6,13 +6,15 @@ SwiftUI · SwiftData + CloudKit · iOS 26 · iPhone first.
 
 ## Status
 
-| Phase | Scope | State |
-|---|---|---|
-| 1 | Data model, App Group, share extension saving end to end | **Ready to try on device** |
-| 2 | Box view: cushions, wood, shadows, name plate | — |
-| 3 | List view, box switching, detail, matched-geometry lift | — |
-| 4 | Compact share sheet, cut-outs, £ conversion, Foundation Models fallback | — |
-| 5 | Paywall (StoreKit 2), iCloud sync checks, App Store prep | — |
+All five phases are written. **None of it has been compiled yet**: it was built in an environment without Xcode. Expect to fix compile errors on the first build before trying anything on a device.
+
+| Phase | Scope |
+|---|---|
+| 1 | Data model, App Group, share extension saving end to end |
+| 2 | Box view: wood frame with grain, sunken tray, suede cushions, brass name plate |
+| 3 | List view with total, box chips and swipe, detail with the lift transition, Move / Edit / Remove, box editor, add from an empty cushion |
+| 4 | Compact share sheet, photo carousel, Vision cut-outs, £ conversion, Foundation Models fallback |
+| 5 | Crowns Pro (StoreKit 2), iCloud sync status, privacy manifests, icon, App Store notes (`docs/AppStore.md`) |
 
 ## Setup
 
@@ -20,26 +22,32 @@ Needs Xcode 26, an iPhone on iOS 26, and a **paid** Apple Developer account (fre
 
 1. **Set your identifiers first.** Open `Config/Crowns.xcconfig` and set `CROWNS_BUNDLE_PREFIX` (default `com.kadeashiq`) and, optionally, `DEVELOPMENT_TEAM`. The App Group (`group.<prefix>.crowns`) and iCloud container (`iCloud.<prefix>.crowns`) are registered with Apple on the first signed build and **can't be deleted afterwards**.
 2. Open `Crowns.xcodeproj`. For the **Crowns** and **CrownsShare** targets, open Signing & Capabilities and pick your team. Check that App Groups shows the group ticked on both, and that iCloud › CloudKit shows the container ticked on Crowns. If the container isn't listed, press + and add it with the exact name from step 1.
-3. Run the **Crowns** scheme on your iPhone once.
+3. To test purchases locally: Product › Scheme › Edit Scheme › Run › Options › StoreKit Configuration › `Crowns.storekit`.
+4. Run the **Crowns** scheme on your iPhone once.
 
-## Trying phase 1
+## Trying it
 
-1. In Safari, open a watch listing. Try one of each:
-   - an **eBay** listing (ebay.co.uk, and a US listing priced in $)
-   - a **Shopify** shop's product page
-   - a **brand site** product page (Omega, Tudor, Seiko…)
-2. Tap Share › **Crowns**. If it's not in the row, tap More and add it.
-3. Check the brand, model, price, photo and box, then tap **Save**.
-4. Open Crowns. The watch should be in the box you chose, without relaunching.
-5. Also try sharing from the **eBay app** or another browser. Those send only a URL, so Crowns loads the page in a hidden web view. It's slower, but the fields should match.
+**Saving from Safari**
+1. Open a watch listing: an eBay listing (one priced in £ and one in $), a Shopify shop, a brand site.
+2. Share › **Crowns** (if missing: More › add it).
+3. Swipe the photos to choose the cover. The watch should lift out onto the cushion after a moment.
+4. Save. The first save goes to Wishlist; after that, the last box you used.
+5. Also share from the eBay app or another browser: these send only a link, so it takes a few seconds longer.
 
-The sheet is deliberately plain for now. Phase 4 builds the real one.
+**In the app**
+- Chips switch boxes; so does swiping sideways. Long-press a chip to edit its box.
+- The toggle top right switches Box and List, and is remembered.
+- Tap a watch: it lifts into the detail (soft tap), and settles back when you close (firmer tap). Pull the cover down to close.
+- Tap an empty cushion to add: paste a link or choose a photo.
+- Save a 4th watch to see the paywall (use the StoreKit config above).
 
-What phase 1 doesn't do yet: prices in other currencies are saved with the original price (e.g. "$4,250") and no £ figure until phase 4. Photos are saved as they are, with no cut-outs yet.
+**Sync**: with two devices on the same iCloud account, a watch saved on one should appear on the other within a minute or so with the app open. Settings › iCloud shows the status and last sync.
+
+**Vision cut-outs and Foundation Models don't run in the Simulator**: watches show as photos there, and the model fallback is skipped. Use a device.
 
 ### When a site comes out wrong
 
-Crowns › the magnifier icon (top right) › **Diagnostics** shows what the extension read from your last 20 shares. Open an entry and export it with the share button. Send me that file; its `snapshotJSON` becomes a test fixture, so the fix stays fixed.
+Settings › **Diagnostics** (debug and TestFlight builds) shows what the extension read from your last 20 shares. Open an entry and export it with the share button. Send me that file; its `snapshotJSON` becomes a test fixture, so the fix stays fixed.
 
 ### Debugging the extension
 
@@ -66,15 +74,19 @@ other apps ─ URL ─▶ hidden WKWebView runs the same script ─┘
 - **Default boxes.** Collection and Wishlist are created on first run. If two devices both create them before syncing, the copies are merged by `seedKey`.
 - **Full boxes** grow by one row instead of refusing a save.
 - The first save from the extension goes to **Wishlist**. After that, it remembers the last box you used.
+- **Paywall in the extension.** If a purchase can't complete inside the share extension, the watch is handed to the app (App Group `Pending/`), which shows the paywall the next time it opens and saves the watch once subscribed.
+- **Prices** are always £. Foreign prices are converted with daily ECB rates (Frankfurter), cached for a day and reused offline; the original is kept, e.g. "$4,250 converted".
 
 ## Project layout
 
 ```
-Crowns/          app target
-CrownsShare/     share extension
-Shared/          compiled into both (model, store, extraction, images)
+Crowns/          app: main screen, detail, box editor, settings, sync monitor
+CrownsShare/     share extension (just the view controller)
+Shared/          compiled into both: model, store, extraction, images,
+                 box rendering, add-watch sheet, paywall
 CrownsTests/     Swift Testing suites + Fixtures/*.snapshot.json
-Config/          xcconfig, Info.plists, entitlements
+Config/          xcconfig, Info.plists, entitlements, Crowns.storekit
+docs/            privacy policy draft, App Store prep
 Tools/
   extractor/     Node + jsdom tests for Preprocess.js; regenerates fixtures
   gen_xcodeproj.py

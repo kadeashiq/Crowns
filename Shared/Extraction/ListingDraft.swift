@@ -6,7 +6,10 @@ struct ListingDraft: Codable, Hashable {
     var brand: String = ""
     var model: String = ""
     var reference: String = ""
+    /// Always pounds once conversion has run. Foreign only if no rate was available.
     var price: Money?
+    /// The listing's own price when it wasn't in pounds.
+    var originalPrice: Money?
     var specs: [Spec] = []
     var imageURLs: [URL] = []
     var sourceURL: URL?
@@ -17,6 +20,13 @@ struct ListingDraft: Codable, Hashable {
 
     enum Source: String, Codable, Hashable {
         case jsonLD, shopify, openGraph, microdata, pageSpecs, heuristics, linkPresentation, foundationModels
+    }
+
+    /// "$1,650 converted", shown under the price.
+    var priceNote: String {
+        if let originalPrice, price?.isGBP == true { return PriceFormatter.original(originalPrice) + " converted" }
+        if let price, !price.isGBP { return PriceFormatter.original(price) }
+        return ""
     }
 
     /// Missing the basics: worth trying the slower fallbacks.

@@ -1,0 +1,82 @@
+{
+  "identifier" : "4C6F1A2E",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_GB",
+    "_storefront" : "GBR",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21500001",
+      "localizations" : [
+
+      ],
+      "name" : "Crowns Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "1.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6739000001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Keep more than 3 watches.",
+              "displayName" : "Crowns Pro Monthly",
+              "locale" : "en_GB"
+            }
+          ],
+          "productID" : "crowns.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Crowns Pro Monthly",
+          "subscriptionGroupID" : "21500001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "14.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6739000002",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Keep more than 3 watches.",
+              "displayName" : "Crowns Pro Yearly",
+              "locale" : "en_GB"
+            }
+          ],
+          "productID" : "crowns.pro.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Crowns Pro Yearly",
+          "subscriptionGroupID" : "21500001",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

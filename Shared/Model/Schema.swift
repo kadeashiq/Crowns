@@ -127,6 +127,18 @@ extension CrownsSchemaV1.Box {
         (watches ?? []).sorted { ($0.slot, $0.addedAt) < ($1.slot, $1.addedAt) }
     }
 
+    func isFree(_ slot: Int) -> Bool {
+        slot >= 0 && slot < capacity && !(watches ?? []).contains { $0.slot == slot }
+    }
+
+    /// Renumbers slots 0, 1, 2… in their current order, growing the box if
+    /// it is now too small. Used after the grid size changes.
+    func compactSlots() {
+        let ordered = sortedWatches
+        while capacity < ordered.count { rows += 1 }
+        for (index, watch) in ordered.enumerated() { watch.slot = index }
+    }
+
     /// The first empty cushion. A full box grows by one row rather than
     /// refusing the save, so saving from Safari never dead-ends.
     func claimFreeSlot() -> Int {
@@ -161,5 +173,13 @@ extension CrownsSchemaV1.Watch {
     var displayName: String {
         let parts = [brand, model].map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         return parts.isEmpty ? "Untitled watch" : parts.joined(separator: " ")
+    }
+}
+
+extension CrownsSchemaV1.Watch {
+    /// "£12,950", or the listing's own price if it couldn't be converted.
+    var priceLabel: String {
+        if let pricePence { return PriceFormatter.pounds(pence: pricePence) }
+        return priceNote
     }
 }

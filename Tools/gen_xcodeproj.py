@@ -8,7 +8,7 @@ Target membership is by folder:
     CrownsShare/   share extension
     Shared/        compiled into the app, the extension and the tests
     CrownsTests/   unit tests (Swift Testing), Fixtures/ as resources
-    Config/        xcconfig, Info.plists, entitlements (not compiled)
+    Config/        xcconfig, Info.plists, entitlements, StoreKit config (not compiled)
 
 Re-run after adding or removing files. Adding files in Xcode also works; the
 next run of this script picks them up from disk either way. Object IDs are
@@ -41,6 +41,8 @@ FILE_TYPES = {
     ".xcconfig": "text.xcconfig",
     ".xcassets": "folder.assetcatalog",
     ".md": "net.daringfireball.markdown",
+    ".xcprivacy": "text.xml",
+    ".storekit": "text",
 }
 
 TOP_GROUPS = ["Crowns", "CrownsShare", "Shared", "CrownsTests", "Config"]
@@ -98,11 +100,11 @@ main_group = add(oid("group", "<main>"), "PBXGroup", children=top + [products_gr
 MEMBERSHIP = {
     "Crowns": {
         "sources": matching(["Crowns", "Shared"], {".swift"}),
-        "resources": matching(["Crowns"], {".xcassets"}) + matching(["Shared"], {".js"}),
+        "resources": matching(["Crowns"], {".xcassets", ".xcprivacy"}) + matching(["Shared"], {".js"}),
     },
     "CrownsShare": {
         "sources": matching(["CrownsShare", "Shared"], {".swift"}),
-        "resources": matching(["Shared"], {".js"}),
+        "resources": matching(["CrownsShare"], {".xcprivacy"}) + matching(["Shared"], {".js"}),
     },
     "CrownsTests": {
         "sources": matching(["CrownsTests", "Shared"], {".swift"}),

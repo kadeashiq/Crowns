@@ -1,23 +1,25 @@
 import UIKit
 import SwiftUI
+import SwiftData
 
 /// Principal class of the share extension (see CrownsShare-Info.plist).
 final class ShareViewController: UIViewController {
-    private var model: ShareModel?
+    private var container: ModelContainer?
+    private var model: AddWatchModel?
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        let model = ShareModel(
-            finish: { [weak self] in
-                self?.extensionContext?.completeRequest(returningItems: nil)
-            },
-            cancel: { [weak self] in
-                self?.extensionContext?.cancelRequest(withError: CocoaError(.userCancelled))
-            }
-        )
+        view.backgroundColor = UIColor(Theme.desk)
+
+        let container = SharedStore.extensionContainer()
+        self.container = container
+        let model = AddWatchModel(context: container.mainContext, isExtension: true) { [weak self] _ in
+            self?.extensionContext?.completeRequest(returningItems: nil)
+        }
         self.model = model
 
-        let hosting = UIHostingController(rootView: ShareSheetView(model: model))
+        let hosting = UIHostingController(rootView: AddWatchSheet(model: model))
+        hosting.view.backgroundColor = .clear
         addChild(hosting)
         hosting.view.frame = view.bounds
         hosting.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -25,10 +27,9 @@ final class ShareViewController: UIViewController {
         hosting.didMove(toParent: self)
 
         let items = extensionContext?.inputItems.compactMap { $0 as? NSExtensionItem } ?? []
-        let hostView: UIView = view
         Task { @MainActor in
             let input = await ShareInputReader.read(items)
-            await model.start(input: input, host: hostView)
+            await model.start(.share(input))
         }
     }
 }
