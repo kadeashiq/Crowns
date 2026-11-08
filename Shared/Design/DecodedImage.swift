@@ -28,7 +28,7 @@ final class ImageCache: @unchecked Sendable {
     }
 }
 
-/// Shows image data once it is decoded, fading in. Holds its frame from the
+/// Shows image data once it is decoded. Holds its frame from the
 /// start, so nothing around it moves or resizes when the image arrives.
 struct DecodedImage: View {
     let key: String
@@ -43,9 +43,8 @@ struct DecodedImage: View {
         self.data = data
         self.maxPixel = maxPixel
         self.contentMode = contentMode
-        // A cached image shows on the first frame, with no fade. This matters
-        // for the lift transition, where the detail view must have the image
-        // immediately.
+        // A cached image shows on the first frame. The detail sheet relies on
+        // this to have its image as soon as it opens.
         _image = State(initialValue: ImageCache.shared.cached(DecodedImage.cacheKey(key, maxPixel)))
     }
 
@@ -57,10 +56,8 @@ struct DecodedImage: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
-                    .transition(.opacity)
             }
         }
-        .animation(Motion.fade, value: image != nil)
         .task(id: DecodedImage.cacheKey(key, maxPixel)) {
             guard image == nil, let data else { return }
             image = await ImageCache.shared.image(for: DecodedImage.cacheKey(key, maxPixel), data: data, maxPixel: maxPixel)

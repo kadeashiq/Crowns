@@ -105,6 +105,8 @@ struct ListingInterpreterTests {
         ModelCase(title: "Omega Seamaster Aqua Terra 150M 41mm Blue Dial", brand: "Omega", reference: "", expected: "Seamaster Aqua Terra 150M"),
         ModelCase(title: "Rolex Oyster Perpetual 41 124300 Green Dial Box Papers", brand: "Rolex", reference: "124300", expected: "Oyster Perpetual 41"),
         ModelCase(title: "Cartier Santos de Cartier Large WSSA0018", brand: "Cartier", reference: "WSSA0018", expected: "Santos de Cartier Large"),
+        ModelCase(title: "Kiwame KUBO(窪) MOMIJI", brand: "Kiwame", reference: "", expected: "KUBO(窪) MOMIJI"),
+        ModelCase(title: "Rolex GMT-Master II (Pepsi), 126710BLRO", brand: "Rolex", reference: "126710BLRO", expected: "GMT-Master II Pepsi"),
     ])
     func deriveModel(_ c: ModelCase) {
         #expect(ListingInterpreter.deriveModel(from: c.title, brand: c.brand, reference: c.reference) == c.expected)

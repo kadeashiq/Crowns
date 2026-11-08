@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-/// Creates Collection and Wishlist on first run, and merges the duplicates
+/// Creates Wishlist and Collection on first run, and merges the duplicates
 /// that appear when two devices each seeded before CloudKit caught up.
 @MainActor
 enum BoxSeeder {
@@ -11,8 +11,8 @@ enum BoxSeeder {
     static func ensureDefaults(in context: ModelContext) {
         let count = (try? context.fetchCount(FetchDescriptor<Box>())) ?? 0
         if count == 0 {
-            context.insert(Box(name: "Collection", columns: 2, rows: 3, finish: .walnut, sortIndex: 0, seedKey: collectionKey))
-            context.insert(Box(name: "Wishlist", columns: 2, rows: 3, finish: .ebony, sortIndex: 1, seedKey: wishlistKey))
+            context.insert(Box(name: "Wishlist", columns: 2, rows: 3, finish: .ebony, sortIndex: 0, seedKey: wishlistKey))
+            context.insert(Box(name: "Collection", columns: 2, rows: 3, finish: .walnut, sortIndex: 1, seedKey: collectionKey))
             try? context.save()
         }
         mergeDuplicateSeeds(in: context)

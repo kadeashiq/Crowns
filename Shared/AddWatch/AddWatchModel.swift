@@ -23,75 +23,58 @@ struct ShareInput {
 @MainActor
 @Observable
 final class AddWatchModel {
-    enum Stage: Equatable { case reading, ready, saving, saved, paywall, handedOff }
+    enum Stage: Equatable { case reading, ready, saving, saved }
 
     struct BoxChoice: Identifiable, Hashable {
         let id: UUID
         let name: String
-        let finish: BoxFinish
     }
 
     var stage: Stage = .reading
     var brand = ""
     var model = ""
+    var reference = ""
+    var notes = ""
     /// Pounds, as typed.
     var priceText = ""
     /// "$1,650 converted", or the original price when no rate was available.
     var priceNote = ""
     var photos: [ImageFetcher.Photo] = []
     var photosLoading = true
-    /// The photo in view in the carousel, which is the cover.
-    /// The sheet calls `coverChanged()` when this changes.
+    /// The photo in view in the carousel: the only one that gets saved.
     var visiblePhotoID: UUID?
-    /// Cut-outs of photos, keyed by photo id, ready to draw.
-    var cutouts: [UUID: UIImage] = [:]
     var boxes: [BoxChoice] = []
     var selectedBoxID: UUID?
     var errorText = ""
 
     let isExtension: Bool
-    let store = ProStore.shared
 
     @ObservationIgnored private var draft = ListingDraft()
     @ObservationIgnored private var outcome: ExtractionPipeline.Outcome?
     @ObservationIgnored private var photoTask: Task<[ImageFetcher.Photo], Never>?
-    @ObservationIgnored private var cutoutTask: Task<Void, Never>?
-    @ObservationIgnored private var cutoutData: [UUID: Data] = [:]
-    @ObservationIgnored private var cutoutFailed: Set<UUID> = []
-    @ObservationIgnored private var preferredSlot: Int?
-    @ObservationIgnored private var preferredBoxID: UUID?
     @ObservationIgnored private var recorded = false
+    @ObservationIgnored private var finished = false
     @ObservationIgnored var hostView: UIView?
     private let context: ModelContext
     private let onFinish: (_ savedMessage: String?) -> Void
 
     /// - Parameters:
     ///   - context: the store to save into.
-    ///   - boxID, slot: where to put the watch when adding from a cushion.
+    ///   - boxID: the box to offer first.
     ///   - finish: called when the sheet should close, with "Saved" or similar if a watch was saved.
-    init(context: ModelContext, isExtension: Bool, boxID: UUID? = nil, slot: Int? = nil, finish: @escaping (_ savedMessage: String?) -> Void) {
+    init(context: ModelContext, isExtension: Bool, boxID: UUID? = nil, finish: @escaping (_ savedMessage: String?) -> Void) {
         self.context = context
         self.isExtension = isExtension
-        self.preferredSlot = slot
-        self.preferredBoxID = boxID
         self.onFinish = finish
         loadBoxes(preferred: boxID)
     }
 
-    var coverIndex: Int {
-        photos.firstIndex { $0.id == visiblePhotoID } ?? 0
-    }
-
     var canSave: Bool { stage == .ready }
-
-    var selectedFinish: BoxFinish {
-        boxes.first { $0.id == selectedBoxID }?.finish ?? .walnut
-    }
 
     private func loadBoxes(preferred: UUID?) {
         BoxSeeder.ensureDefaults(in: context)
         let list = BoxSeeder.orderedBoxes(in: context)
-        boxes = list.map { BoxChoice(id: $0.id, name: $0.name, finish: $0.finish) }
+        boxes = list.map { BoxChoice(id: $0.id, name: $0.name) }
         let last = AppGroup.defaults.string(forKey: SharedKeys.lastBoxID).flatMap(UUID.init(uuidString:))
         // From a shop page it's usually a want, so the very first save goes to Wishlist.
         selectedBoxID = boxes.first(where: { $0.id == preferred })?.id
@@ -117,7 +100,6 @@ final class AddWatchModel {
             if let photo = ImageFetcher.photo(from: data) {
                 photos = [photo]
                 visiblePhotoID = photo.id
-                coverChanged()
             } else {
                 errorText = "Couldn't read that photo"
             }
@@ -131,6 +113,7 @@ final class AddWatchModel {
         draft = outcome.draft
         brand = draft.brand
         model = draft.model
+        reference = draft.reference
         priceText = PriceFormatter.editingText(pence: draft.price?.pence)
         priceNote = draft.priceNote
         stage = .ready
@@ -151,38 +134,6 @@ final class AddWatchModel {
         photosLoading = false
         if visiblePhotoID == nil {
             visiblePhotoID = loaded.first?.id
-            coverChanged()
-        }
-    }
-
-    // MARK: - Cut-outs
-
-    func coverChanged() {
-        cutoutTask?.cancel()
-        guard let id = visiblePhotoID, let photo = photos.first(where: { $0.id == id }),
-              cutouts[id] == nil, !cutoutFailed.contains(id) else { return }
-        cutoutTask = Task { [weak self] in
-            // Let a quick swipe settle before spending time on Vision.
-            try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled else { return }
-            let png = await CutoutMaker.cutout(from: photo.data)
-            guard let self, !Task.isCancelled else { return }
-            guard let png, let cg = ImageDownscaler.thumbnail(from: png, maxPixel: ImageFetcher.previewPixel) else {
-                self.cutoutFailed.insert(id)
-                return
-            }
-            self.cutoutData[id] = png
-            self.cutouts[id] = UIImage(cgImage: cg)
-            self.trimCutouts(keeping: id)
-        }
-    }
-
-    /// Keeps memory flat in the extension: only the last few cut-outs stay.
-    private func trimCutouts(keeping id: UUID) {
-        guard cutouts.count > 3 else { return }
-        for key in cutouts.keys where key != id && cutouts.count > 3 {
-            cutouts[key] = nil
-            cutoutData[key] = nil
         }
     }
 
@@ -190,40 +141,14 @@ final class AddWatchModel {
 
     func save() async {
         guard stage == .ready else { return }
-        guard store.canAddWatch(in: context) else {
-            stage = .paywall
-            return
-        }
         await commit()
-    }
-
-    /// After the paywall: true means Pro is now active.
-    func paywallFinished(_ subscribed: Bool) async {
-        if subscribed {
-            stage = .ready
-            await commit()
-        } else {
-            stage = .ready
-        }
-    }
-
-    /// The extension can't always complete a purchase. Hand the watch to the
-    /// app, which shows the paywall next time it opens and then saves it.
-    func handOffToApp() async {
-        let photos = await photoTask?.value ?? self.photos
-        PendingSaveStore.stash(editedDraft(), photos: photos.map(\.data), coverIndex: coverIndex, cutout: currentCutout, boxID: selectedBoxID)
-        record(saved: false)
-        stage = .handedOff
-    }
-
-    private var currentCutout: Data? {
-        visiblePhotoID.flatMap { cutoutData[$0] }
     }
 
     private func editedDraft() -> ListingDraft {
         var edited = draft
         edited.brand = brand
         edited.model = model
+        edited.reference = reference
         let typed = priceText.trimmingCharacters(in: .whitespaces)
         if let pence = PriceFormatter.pence(fromEditing: typed) {
             if pence != draft.price?.pence {
@@ -241,20 +166,17 @@ final class AddWatchModel {
     private func commit() async {
         guard let boxID = selectedBoxID else { return }
         stage = .saving
-        // If the cover's cut-out is still running, give it a moment to land.
-        if let id = visiblePhotoID, cutoutData[id] == nil, !cutoutFailed.contains(id) {
-            _ = await cutoutTask?.value
-        }
         let photos = await photoTask?.value ?? self.photos
+        let chosen = photos.first { $0.id == visiblePhotoID } ?? photos.first
         let edited = editedDraft()
         let id = boxID
         do {
             guard let box = try context.fetch(FetchDescriptor<Box>(predicate: #Predicate { $0.id == id })).first else {
                 throw CocoaError(.coderValueNotFound)
             }
-            // The tapped cushion only counts if they kept the box it was in.
-            let slot = boxID == preferredBoxID ? preferredSlot : nil
-            try WatchRecorder.save(edited, photos: photos.map(\.data), coverIndex: coverIndex, coverCutout: currentCutout, to: box, slot: slot, in: context)
+            let watch = try WatchRecorder.save(edited, photos: chosen.map { [$0.data] } ?? [], coverIndex: 0, to: box, in: context)
+            watch.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            try context.save()
             AppGroup.defaults.set(id.uuidString, forKey: SharedKeys.lastBoxID)
             if isExtension { ExternalChanges.markChanged() }
             draft = edited
@@ -262,22 +184,25 @@ final class AddWatchModel {
             Haptics.saved()
             stage = .saved
             try? await Task.sleep(for: .milliseconds(650))
-            onFinish(isExtension ? nil : "Saved")
+            finish(isExtension ? nil : "Saved")
         } catch {
             errorText = "Couldn't save"
             stage = .ready
         }
     }
 
+    /// The sheet was swiped away. Does nothing once a save has started.
     func cancel() {
+        guard stage != .saving, stage != .saved else { return }
         photoTask?.cancel()
-        cutoutTask?.cancel()
         record(saved: false)
-        onFinish(nil)
+        finish(nil)
     }
 
-    func close() {
-        onFinish(nil)
+    private func finish(_ message: String?) {
+        guard !finished else { return }
+        finished = true
+        onFinish(message)
     }
 
     private func record(saved: Bool) {

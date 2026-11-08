@@ -1,20 +1,20 @@
 # Crowns
 
-A digital watch box for iPhone. Keep the watches you own and the ones you want, each on a cushion in a box. Save watches straight from Safari: Share › Crowns, and the watch lands in your box with its photo, price and specs filled in.
+A digital watch box for iPhone. Keep the watches you own and the ones you want, in simple grids. Save watches straight from Safari: Share › Crowns, and the watch lands in your box with its photo, price and specs filled in.
 
 SwiftUI · SwiftData + CloudKit · iOS 26 · iPhone first.
 
 ## Status
 
-All five phases are written. **None of it has been compiled yet**: it was built in an environment without Xcode. Expect to fix compile errors on the first build before trying anything on a device.
+All five phases are written and build on Xcode 27. The look is flat, black, white and greys; see `docs/DesignSystem.md`.
 
 | Phase | Scope |
 |---|---|
 | 1 | Data model, App Group, share extension saving end to end |
-| 2 | Box view: wood frame with grain, sunken tray, suede cushions, brass name plate |
-| 3 | List view with total, box chips and swipe, detail with the lift transition, Move / Edit / Remove, box editor, add from an empty cushion |
-| 4 | Compact share sheet, photo carousel, Vision cut-outs, £ conversion, Foundation Models fallback |
-| 5 | Crowns Pro (StoreKit 2), iCloud sync status, privacy manifests, icon, App Store notes (`docs/AppStore.md`) |
+| 2 | Grid of watches, each photo edge to edge on a raised card |
+| 3 | List view, box chips and swipe, detail in a sheet, Move / Edit / Remove, box editor |
+| 4 | Compact share sheet, photo carousel with a single photo picked to import, £ conversion, Foundation Models fallback |
+| 5 | iCloud sync status, privacy manifests, icon, App Store notes (`docs/AppStore.md`) |
 
 ## Setup
 
@@ -22,28 +22,26 @@ Needs Xcode 26, an iPhone on iOS 26, and a **paid** Apple Developer account (fre
 
 1. **Set your identifiers first.** Open `Config/Crowns.xcconfig` and set `CROWNS_BUNDLE_PREFIX` (default `com.kadeashiq`) and, optionally, `DEVELOPMENT_TEAM`. The App Group (`group.<prefix>.crowns`) and iCloud container (`iCloud.<prefix>.crowns`) are registered with Apple on the first signed build and **can't be deleted afterwards**.
 2. Open `Crowns.xcodeproj`. For the **Crowns** and **CrownsShare** targets, open Signing & Capabilities and pick your team. Check that App Groups shows the group ticked on both, and that iCloud › CloudKit shows the container ticked on Crowns. If the container isn't listed, press + and add it with the exact name from step 1.
-3. To test purchases locally: Product › Scheme › Edit Scheme › Run › Options › StoreKit Configuration › `Crowns.storekit`.
-4. Run the **Crowns** scheme on your iPhone once.
+3. Run the **Crowns** scheme on your iPhone once.
 
 ## Trying it
 
 **Saving from Safari**
 1. Open a watch listing: an eBay listing (one priced in £ and one in $), a Shopify shop, a brand site.
 2. Share › **Crowns** (if missing: More › add it).
-3. Swipe the photos to choose the cover. The watch should lift out onto the cushion after a moment.
+3. Tap a thumbnail or swipe to pick the one photo to import.
 4. Save. The first save goes to Wishlist; after that, the last box you used.
 5. Also share from the eBay app or another browser: these send only a link, so it takes a few seconds longer.
 
 **In the app**
-- Chips switch boxes; so does swiping sideways. Long-press a chip to edit its box.
-- The toggle top right switches Box and List, and is remembered.
-- Tap a watch: it lifts into the detail (soft tap), and settles back when you close (firmer tap). Pull the cover down to close.
-- Tap an empty cushion to add: paste a link or choose a photo.
-- Save a 4th watch to see the paywall (use the StoreKit config above).
+- Chips switch boxes; so does swiping sideways. Long-press a chip to edit its box. The arrows beside the + drag boxes into any order.
+- The toggle top right switches Grid and List, and is remembered.
+- Tap a watch: it opens in a sheet. Swipe any sheet down to close it.
+- The + at the bottom adds a watch: paste a link or choose a photo.
 
 **Sync**: with two devices on the same iCloud account, a watch saved on one should appear on the other within a minute or so with the app open. Settings › iCloud shows the status and last sync.
 
-**Vision cut-outs and Foundation Models don't run in the Simulator**: watches show as photos there, and the model fallback is skipped. Use a device.
+**Foundation Models doesn't run in the Simulator**: the model fallback is skipped. Use a device.
 
 ### When a site comes out wrong
 
@@ -71,10 +69,9 @@ other apps ─ URL ─▶ hidden WKWebView runs the same script ─┘
 - **One store, two processes.** The SwiftData store lives in the App Group. The app opens it with CloudKit mirroring. The extension opens the same file without CloudKit, which keeps it light, and the app exports the extension's writes to iCloud the next time it runs. On returning to the foreground, the app re-queries if the extension saved something.
 - **Memory.** Images are never fully decoded in the extension. ImageIO makes thumbnails straight from the downloaded bytes.
 - **Schema.** `CrownsSchemaV1` is versioned and CloudKit-safe: every field is optional or defaulted, nothing is unique, and images use external storage. After the CloudKit schema is deployed to production, add a V2 rather than editing V1.
-- **Default boxes.** Collection and Wishlist are created on first run. If two devices both create them before syncing, the copies are merged by `seedKey`.
+- **Default boxes.** Wishlist and Collection are created on first run. If two devices both create them before syncing, the copies are merged by `seedKey`.
 - **Full boxes** grow by one row instead of refusing a save.
 - The first save from the extension goes to **Wishlist**. After that, it remembers the last box you used.
-- **Paywall in the extension.** If a purchase can't complete inside the share extension, the watch is handed to the app (App Group `Pending/`), which shows the paywall the next time it opens and saves the watch once subscribed.
 - **Prices** are always £. Foreign prices are converted with daily ECB rates (Frankfurter), cached for a day and reused offline; the original is kept, e.g. "$4,250 converted".
 
 ## Project layout
@@ -83,9 +80,9 @@ other apps ─ URL ─▶ hidden WKWebView runs the same script ─┘
 Crowns/          app: main screen, detail, box editor, settings, sync monitor
 CrownsShare/     share extension (just the view controller)
 Shared/          compiled into both: model, store, extraction, images,
-                 box rendering, add-watch sheet, paywall
+                 box rendering, add-watch sheet
 CrownsTests/     Swift Testing suites + Fixtures/*.snapshot.json
-Config/          xcconfig, Info.plists, entitlements, Crowns.storekit
+Config/          xcconfig, Info.plists, entitlements
 docs/            privacy policy draft, App Store prep
 Tools/
   extractor/     Node + jsdom tests for Preprocess.js; regenerates fixtures

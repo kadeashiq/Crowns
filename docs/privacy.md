@@ -10,7 +10,7 @@ Crowns doesn't collect any data about you.
 
 **Exchange rates.** To show prices in pounds, Crowns fetches daily rates from Frankfurter (frankfurter.dev). The request contains no information about you or your watches.
 
-**Purchases** are handled by Apple. We don't receive your payment details.
+**The purchase** of the app is handled by Apple. We don't receive your payment details.
 
 **On-device intelligence.** When a page has no structured product details, Crowns may use Apple's on-device language model to read it. This happens entirely on your device.
 

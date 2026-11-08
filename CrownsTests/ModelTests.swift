@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+import UIKit
 
 @MainActor
 private func memoryContext() throws -> ModelContext {
@@ -72,23 +73,73 @@ struct ModelTests {
         draft.brand = "Omega"
         draft.price = Money(amount: 3312, currency: "GBP")
         draft.originalPrice = Money(amount: 4250, currency: "USD")
-        let watch = try WatchRecorder.save(draft, photos: [], coverIndex: 0, coverCutout: nil, to: box, in: context)
+        let watch = try WatchRecorder.save(draft, photos: [], coverIndex: 0, to: box, in: context)
         #expect(watch.pricePence == 331_200)
         #expect(watch.priceNote == "$4,250 converted")
         #expect(watch.originalCurrency == "USD")
         #expect(watch.priceLabel == "£3,312")
     }
+
+    @Test func savingImportsOnlyTheChosenPhoto() async throws {
+        let context = try memoryContext()
+        var closed = false
+        let model = AddWatchModel(context: context, isExtension: false) { _ in closed = true }
+        let photos = try [UIColor.red, .green, .blue].map { color in
+            let jpeg = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600)).jpegData(withCompressionQuality: 0.9) { ctx in
+                color.setFill()
+                ctx.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
+            }
+            return try #require(ImageFetcher.photo(from: jpeg))
+        }
+        model.photos = photos
+        model.visiblePhotoID = photos[1].id
+        model.stage = .ready
+
+        await model.save()
+
+        let saved = try #require(try context.fetch(FetchDescriptor<Watch>()).first)
+        #expect(saved.sortedPhotos.map(\.data) == [photos[1].data])
+        #expect(closed)
+    }
+
+    @Test func savingKeepsWhatWasTyped() async throws {
+        let context = try memoryContext()
+        let model = AddWatchModel(context: context, isExtension: true) { _ in }
+        model.brand = "Tudor"
+        model.model = "Pelagos"
+        model.reference = "M25600TN"
+        model.priceText = "3,200"
+        model.notes = "  Birthday  "
+        model.stage = .ready
+
+        await model.save()
+
+        let saved = try #require(try context.fetch(FetchDescriptor<Watch>()).first)
+        #expect(saved.brand == "Tudor")
+        #expect(saved.model == "Pelagos")
+        #expect(saved.reference == "M25600TN")
+        #expect(saved.pricePence == 320_000)
+        #expect(saved.notes == "Birthday")
+    }
 }
 
-@Suite("Box geometry")
-struct BoxMetricsTests {
-    @Test func cellsFitTheWidth() {
-        let m = BoxMetrics(width: 358, columns: 2, rows: 3)
-        let used = m.side * 2 + m.trayPadding * 2 + m.cellWidth * 2 + m.gap
-        #expect(abs(used - 358) < 0.001)
-        #expect(m.cellHeight > m.cellWidth)
-        // Six cushions should fit a phone held in one hand without scrolling.
-        #expect(m.height < 700)
+@Suite("Grid geometry")
+struct GridMetricsTests {
+    @Test func cellsAreTallerThanWideWhenSideBySide() {
+        for columns in 2...4 {
+            #expect(GridMetrics(columns: columns).aspectRatio < 1)
+        }
+    }
+
+    @Test func captionsGoWhenCellsGetNarrow() {
+        #expect(GridMetrics(columns: 3).showsCaption)
+        #expect(!GridMetrics(columns: 4).showsCaption)
+    }
+
+    @Test func sixWatchesFitAPhoneWithoutScrolling() {
+        let width = (393 - 16 * 2 - Space.sm) / 2
+        let height = width / GridMetrics(columns: 2).aspectRatio
+        #expect(height * 3 + Space.sm * 2 < 700)
     }
 }
 

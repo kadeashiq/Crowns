@@ -8,8 +8,6 @@
 	<string>$(CROWNS_CLOUDKIT_CONTAINER)</string>
 	<key>CrownsPrivacyURL</key>
 	<string>$(CROWNS_PRIVACY_URL)</string>
-	<key>UIUserInterfaceStyle</key>
-	<string>Dark</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>

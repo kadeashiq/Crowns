@@ -120,10 +120,12 @@ enum ListingInterpreter {
     }
 
     private static func model(table: SpecTable, product: JSONValue?, name: String, h1: String?, brand: String, reference: String) -> String {
-        let candidates = [table.value("model", "model name"), product?["model"]?.string, name, h1].compactMap { $0 }
-        for candidate in candidates {
-            guard let cleaned = ReferenceDetector.clean(candidate), !ReferenceDetector.isReferenceLike(cleaned) else { continue }
-            let derived = deriveModel(from: cleaned, brand: brand, reference: reference)
+        let fields = [table.value("model", "model name"), product?["model"]?.string]
+            .compactMap(ReferenceDetector.clean)
+            .filter { !ReferenceDetector.isReferenceLike($0) }
+        // Titles skip clean(): its length limit is for spec values, and listing titles run long.
+        for candidate in fields + [name, h1].compactMap({ $0 }) {
+            let derived = deriveModel(from: candidate, brand: brand, reference: reference)
             if !derived.isEmpty { return derived }
         }
         return ""
@@ -252,7 +254,7 @@ enum ListingInterpreter {
         let tokens = t.split(whereSeparator: \.isWhitespace).map(String.init)
         var words: [String] = []
         for (i, raw) in tokens.enumerated() {
-            let token = raw.trimmingCharacters(in: CharacterSet(charactersIn: ",;:()[]|\"“”"))
+            let token = trimmedToken(raw)
             let lower = token.lowercased()
                 .replacingOccurrences(of: "\u{2011}", with: "-")
                 .replacingOccurrences(of: "\u{2010}", with: "-")
@@ -272,6 +274,20 @@ enum ListingInterpreter {
             if words.count == 4 { break }
         }
         return words.joined(separator: " ")
+    }
+
+    /// Drops punctuation around a title word, keeping brackets that belong
+    /// to it: "(Pepsi)," → "Pepsi", but "KUBO(窪)" stays whole.
+    private static func trimmedToken(_ raw: String) -> String {
+        var token = raw.trimmingCharacters(in: CharacterSet(charactersIn: ",;:|\"“”"))
+        for (open, close) in [("(", ")"), ("[", "]")] {
+            if token.hasPrefix(open), token.hasSuffix(close) {
+                token = String(token.dropFirst().dropLast())
+            }
+            if token.hasPrefix(open), !token.contains(close) { token.removeFirst() }
+            if token.hasSuffix(close), !token.contains(open) { token.removeLast() }
+        }
+        return token
     }
 
     private static func defaultCurrency(for s: PageSnapshot) -> String? {

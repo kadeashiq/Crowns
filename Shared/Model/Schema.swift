@@ -71,8 +71,8 @@ enum CrownsSchemaV1: VersionedSchema {
         var slot: Int = 0
         var addedAt: Date = Date()
 
-        /// The image that sits on the cushion: a cut-out when we have one,
-        /// otherwise the chosen photo, downscaled.
+        /// The chosen photo, downscaled. `coverIsCutout` is only true on older
+        /// saves, from when covers were cut out of their photos.
         @Attribute(.externalStorage) var coverData: Data?
         var coverIsCutout: Bool = false
         /// Small JPEG for list rows, so lists never decode full images.
@@ -139,7 +139,7 @@ extension CrownsSchemaV1.Box {
         for (index, watch) in ordered.enumerated() { watch.slot = index }
     }
 
-    /// The first empty cushion. A full box grows by one row rather than
+    /// The first free slot. A full box grows by one row rather than
     /// refusing the save, so saving from Safari never dead-ends.
     func claimFreeSlot() -> Int {
         let taken = Set((watches ?? []).map(\.slot))

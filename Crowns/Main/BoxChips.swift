@@ -7,52 +7,54 @@ struct BoxChips: View {
     let onSelect: (Box) -> Void
     let onAdd: () -> Void
     let onEdit: (Box) -> Void
+    let onReorder: () -> Void
+
+    @Namespace private var selection
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
-                HStack(spacing: 8) {
+                HStack(spacing: Space.xs) {
                     ForEach(boxes) { box in
-                        chip(box)
-                            .id(box.id)
+                        Button {
+                            onSelect(box)
+                        } label: {
+                            Chip(title: box.name, selected: box.id == selectedID, namespace: selection)
+                        }
+                        .buttonStyle(PressableStyle())
+                        .contextMenu {
+                            Button("Edit box") { onEdit(box) }
+                            if boxes.count > 1 {
+                                Button("Reorder boxes", action: onReorder)
+                            }
+                        }
+                        // Keeps the next chip's shadow off the selected one.
+                        .zIndex(box.id == selectedID ? 1 : 0)
+                        .id(box.id)
                     }
                     Button(action: onAdd) {
                         Image(systemName: "plus")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(Theme.inkSecondary)
-                            .frame(width: 34, height: 34)
-                            .background(Color.white.opacity(0.05), in: .circle)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.circle(diameter: 40))
                     .accessibilityLabel("New box")
+                    if boxes.count > 1 {
+                        Button(action: onReorder) {
+                            Image(systemName: "arrow.up.arrow.down")
+                        }
+                        .buttonStyle(.circle(diameter: 40))
+                        .accessibilityLabel("Reorder boxes")
+                    }
                 }
-                .padding(.horizontal, 16)
+                .animation(Motion.selection, value: selectedID)
+                .padding(.horizontal, Space.md)
+                .padding(.vertical, Space.sm)
             }
             .scrollIndicators(.hidden)
+            .scrollClipDisabled()
             .onChange(of: selectedID) { _, id in
                 guard let id else { return }
-                withAnimation(Motion.standard) { proxy.scrollTo(id, anchor: .center) }
+                proxy.scrollTo(id, anchor: .center)
             }
-        }
-    }
-
-    private func chip(_ box: Box) -> some View {
-        let selected = box.id == selectedID
-        return Button {
-            onSelect(box)
-        } label: {
-            Text(box.name)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(selected ? Theme.ink : Theme.inkSecondary)
-                .padding(.horizontal, 15)
-                .padding(.vertical, 8)
-                .background(selected ? Theme.brass.opacity(0.2) : Color.white.opacity(0.05), in: .capsule)
-                .overlay(Capsule().strokeBorder(selected ? Theme.brass.opacity(0.5) : .clear, lineWidth: 0.6))
-                .animation(Motion.standard, value: selected)
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button("Edit box") { onEdit(box) }
         }
     }
 }

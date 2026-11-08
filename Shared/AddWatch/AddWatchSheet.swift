@@ -5,92 +5,64 @@ import SwiftUI
 struct AddWatchSheet: View {
     @Bindable var model: AddWatchModel
     @FocusState private var focus: Field?
+    @Namespace private var boxSelection
 
-    private enum Field { case brand, model, price }
+    private enum Field { case brand, model, reference, price, notes }
 
     var body: some View {
         NavigationStack {
             sheet.toolbar(.hidden, for: .navigationBar)
         }
-        .preferredColorScheme(.dark)
     }
 
     private var sheet: some View {
         ZStack {
-            Theme.deskBackground
-            switch model.stage {
-            case .paywall:
-                ScrollView {
-                    PaywallView(
-                        store: model.store,
-                        onFinish: { subscribed in _ = Task { await model.paywallFinished(subscribed) } },
-                        onCannotPurchase: handOff
-                    )
-                }
-                .transition(.opacity)
-            case .handedOff:
-                handedOff.transition(.opacity)
-            default:
-                content.transition(.opacity)
-            }
+            Theme.canvas.ignoresSafeArea()
+            content
         }
         .background(ViewAnchor { model.hostView = $0 })
-        .animation(Motion.standard, value: model.stage)
-    }
-
-    /// In the extension, a purchase that can't finish hands the watch to the app.
-    private var handOff: (() -> Void)? {
-        guard model.isExtension else { return nil }
-        return { _ = Task { await model.handOffToApp() } }
     }
 
     // MARK: - Main
 
     private var content: some View {
         VStack(spacing: 0) {
-            header
-            carousel
-                .frame(height: 250)
-            dots
-                .frame(height: 18)
-            fields
-                .padding(.top, 6)
-            boxPicker
-                .padding(.top, 18)
-            Spacer(minLength: 14)
+            if model.isExtension {
+                // Extensions don't get the system's indicator.
+                Capsule()
+                    .fill(Theme.inkTertiary.opacity(0.4))
+                    .frame(width: 36, height: 5)
+                    .padding(.top, 5)
+            }
+            SheetHeader(title: "Add watch")
+            ScrollView {
+                VStack(spacing: 0) {
+                    carousel
+                        .frame(height: 280)
+                        .padding(.horizontal, -(Space.lg - 4))
+                    photoChooser
+                    fields
+                        .padding(.top, Space.md)
+                    boxPicker
+                        .padding(.top, Space.md)
+                }
+                .padding(.horizontal, Space.lg - 4)
+            }
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
             if !model.errorText.isEmpty {
                 Text(model.errorText)
-                    .font(.footnote)
-                    .foregroundStyle(.red.opacity(0.85))
-                    .padding(.bottom, 8)
+                    .font(Typeface.caption)
+                    .foregroundStyle(Theme.ink)
+                    .padding(.top, Space.xs)
             }
-            saveButton
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 14)
-    }
-
-    private var header: some View {
-        ZStack {
-            Text("Add watch")
-                .font(.headline)
-                .foregroundStyle(Theme.ink)
-            HStack {
-                Button {
-                    model.cancel()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 22, height: 22)
-                }
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-                .accessibilityLabel("Cancel")
-                Spacer()
+            // While typing, the keyboard's Done takes its place.
+            if focus == nil {
+                saveButton
+                    .padding(.horizontal, Space.lg - 4)
+                    .padding(.vertical, Space.sm)
             }
         }
-        .padding(.top, 14)
-        .padding(.bottom, 4)
     }
 
     // MARK: - Photos
@@ -98,20 +70,16 @@ struct AddWatchSheet: View {
     @ViewBuilder
     private var carousel: some View {
         if model.photos.isEmpty {
-            ZStack {
-                Cushion(palette: FinishPalette.for(model.selectedFinish))
-                    .frame(width: 170, height: 210)
-                    .opacity(0.9)
+            Theme.well.overlay {
                 if model.photosLoading {
                     ProgressView().tint(Theme.inkSecondary)
                 }
             }
-            .transition(.opacity)
         } else {
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
                     ForEach(model.photos) { photo in
-                        CarouselPage(photo: photo, cutout: model.cutouts[photo.id], finish: model.selectedFinish)
+                        CarouselPage(photo: photo)
                             .containerRelativeFrame(.horizontal)
                             .id(photo.id)
                     }
@@ -123,57 +91,94 @@ struct AddWatchSheet: View {
             .scrollPosition(id: $model.visiblePhotoID)
             .onChange(of: model.visiblePhotoID) { _, _ in
                 Haptics.tick()
-                model.coverChanged()
             }
-            .transition(.opacity)
         }
     }
 
+    /// Picks the one photo to save. Swiping the carousel does the same.
     @ViewBuilder
-    private var dots: some View {
+    private var photoChooser: some View {
         if model.photos.count > 1 {
-            HStack(spacing: 6) {
-                ForEach(model.photos) { photo in
-                    Circle()
-                        .fill(photo.id == model.visiblePhotoID ? Theme.ink : Theme.inkTertiary.opacity(0.6))
-                        .frame(width: 5, height: 5)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text("Pick your cover photo")
+                    .font(Typeface.label)
+                    .foregroundStyle(Theme.inkSecondary)
+                ScrollView(.horizontal) {
+                    HStack(spacing: Space.xs) {
+                        ForEach(Array(model.photos.enumerated()), id: \.element.id) { index, photo in
+                            thumbnail(photo, number: index + 1)
+                        }
+                    }
                 }
+                .scrollIndicators(.hidden)
+                .fullBleed()
             }
-            .animation(Motion.standard, value: model.visiblePhotoID)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, Space.sm)
         }
+    }
+
+    private func thumbnail(_ photo: ImageFetcher.Photo, number: Int) -> some View {
+        let selected = photo.id == model.visiblePhotoID
+        return Button {
+            model.visiblePhotoID = photo.id
+        } label: {
+            Image(uiImage: photo.preview)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 52, height: 52)
+                .clipShape(.rect(cornerRadius: Radius.sm, style: .continuous))
+                .opacity(selected ? 1 : 0.5)
+                .padding(3)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radius.sm + 3, style: .continuous)
+                        .strokeBorder(Theme.ink, lineWidth: selected ? 2 : 0)
+                )
+                .overlay(alignment: .bottomTrailing) {
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(Theme.onInk, Theme.ink)
+                            .offset(x: 2, y: 2)
+                    }
+                }
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel("Photo \(number)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: - Fields
 
     private var fields: some View {
-        VStack(spacing: 4) {
-            TextField("Brand", text: $model.brand)
-                .font(.title3.weight(.semibold))
-                .focused($focus, equals: .brand)
-            TextField("Model", text: $model.model)
-                .font(.title3)
-                .focused($focus, equals: .model)
-            HStack(spacing: 2) {
-                Text("£")
-                    .foregroundStyle(Theme.inkSecondary)
-                TextField("Price", text: $model.priceText)
+        Card(padding: Space.xs + 2) {
+            VStack(spacing: Space.xs) {
+                row("Brand", text: $model.brand, focus: .brand)
+                row("Model", text: $model.model, focus: .model)
+                row("Reference", text: $model.reference, focus: .reference)
+                    .autocorrectionDisabled()
+                row("Price", text: $model.priceText, focus: .price, prefix: "£")
                     .keyboardType(.decimalPad)
-                    .focused($focus, equals: .price)
-                    .fixedSize()
-            }
-            .font(.body.monospacedDigit())
-            .padding(.top, 6)
-            if !model.priceNote.isEmpty {
-                Text(model.priceNote)
-                    .font(.caption)
-                    .foregroundStyle(Theme.inkTertiary)
+                if !model.priceNote.isEmpty {
+                    Text(model.priceNote)
+                        .font(.caption)
+                        .foregroundStyle(Theme.inkTertiary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, Space.xxs)
+                }
+                HStack(alignment: .top, spacing: Space.sm) {
+                    rowLabel("Notes")
+                    TextField("Notes", text: $model.notes, axis: .vertical)
+                        .lineLimit(1...4)
+                        .focused($focus, equals: .notes)
+                }
+                .padding(.vertical, Space.sm)
+                .filledField()
+                .textInputAutocapitalization(.sentences)
             }
         }
-        .multilineTextAlignment(.center)
         .textInputAutocapitalization(.words)
-        .autocorrectionDisabled()
-        .submitLabel(.done)
-        .foregroundStyle(Theme.ink)
         .disabled(model.stage == .reading)
         .opacity(model.stage == .reading ? 0.4 : 1)
         .redacted(reason: model.stage == .reading ? .placeholder : [])
@@ -185,29 +190,46 @@ struct AddWatchSheet: View {
         }
     }
 
+    private func row(_ title: String, text: Binding<String>, focus field: Field, prefix: String? = nil) -> some View {
+        HStack(spacing: Space.sm) {
+            rowLabel(title)
+            if let prefix {
+                Text(prefix).foregroundStyle(Theme.inkSecondary)
+            }
+            TextField(title, text: text)
+                .focused($focus, equals: field)
+        }
+        .filledField()
+    }
+
+    private func rowLabel(_ title: String) -> some View {
+        Text(title)
+            .font(Typeface.secondary)
+            .foregroundStyle(Theme.inkSecondary)
+            .frame(width: 80, alignment: .leading)
+    }
+
     private var boxPicker: some View {
         ScrollView(.horizontal) {
-            HStack(spacing: 8) {
+            HStack(spacing: Space.xs) {
                 ForEach(model.boxes) { box in
-                    let selected = box.id == model.selectedBoxID
                     Button {
                         Haptics.tick()
-                        withAnimation(Motion.standard) { model.selectedBoxID = box.id }
+                        model.selectedBoxID = box.id
                     } label: {
-                        Text(box.name)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(selected ? Theme.ink : Theme.inkSecondary)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(selected ? Theme.brass.opacity(0.22) : Color.white.opacity(0.06), in: .capsule)
-                            .overlay(Capsule().strokeBorder(selected ? Theme.brass.opacity(0.55) : .clear, lineWidth: 0.6))
+                        Chip(title: box.name, selected: box.id == model.selectedBoxID, namespace: boxSelection)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableStyle())
+                    .zIndex(box.id == model.selectedBoxID ? 1 : 0)
                 }
             }
-            .frame(maxWidth: .infinity)
+            .animation(Motion.selection, value: model.selectedBoxID)
+            // Room for the chips' shadows inside the scroll area.
+            .padding(.vertical, Space.xl)
         }
         .scrollIndicators(.hidden)
+        .fullBleed()
+        .padding(.vertical, Space.sm - Space.xl)
     }
 
     private var saveButton: some View {
@@ -217,64 +239,36 @@ struct AddWatchSheet: View {
         } label: {
             ZStack {
                 Text("Save").opacity(model.stage == .saved ? 0 : 1)
-                Text("Saved").opacity(model.stage == .saved ? 1 : 0)
+                Label("Saved", systemImage: "checkmark")
+                    .opacity(model.stage == .saved ? 1 : 0)
             }
-            .font(.body.weight(.semibold))
             .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.glassProminent)
-        .tint(Theme.brass.opacity(0.85))
-        .controlSize(.large)
+        .buttonStyle(.pill())
         .disabled(model.stage == .reading || model.stage == .saving)
-        .animation(Motion.standard, value: model.stage)
-    }
-
-    private var handedOff: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "crown")
-                .font(.system(size: 30, weight: .light))
-                .foregroundStyle(Theme.brass)
-            Text("Open Crowns to finish saving")
-                .font(.headline)
-                .foregroundStyle(Theme.ink)
-            Button("Done") { model.close() }
-                .buttonStyle(.glass)
-                .controlSize(.large)
-                .padding(.top, 6)
-        }
-        .padding(24)
     }
 }
 
-/// One photo in the carousel, resting on a cushion. When Vision has lifted
-/// the watch out of it, the cut-out replaces the photo.
+private extension View {
+    /// Runs a horizontal row to the sheet's edges, with its content still
+    /// lined up with the margins.
+    func fullBleed() -> some View {
+        contentMargins(.horizontal, Space.lg - 4, for: .scrollContent)
+            .padding(.horizontal, -(Space.lg - 4))
+    }
+}
+
+/// One photo in the carousel, filling the page.
 private struct CarouselPage: View {
     let photo: ImageFetcher.Photo
-    let cutout: UIImage?
-    let finish: BoxFinish
 
     var body: some View {
-        ZStack {
-            Cushion(palette: FinishPalette.for(finish))
-                .frame(width: 170, height: 210)
-            if let cutout {
-                Image(uiImage: cutout)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 176, height: 196)
-                    .shadow(color: .black.opacity(0.65), radius: 9, x: 0, y: 8)
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
-            } else {
+        Theme.well
+            .overlay {
                 Image(uiImage: photo.preview)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 128, height: 128)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .shadow(color: .black.opacity(0.6), radius: 6, x: 0, y: 5)
-                    .transition(.opacity)
             }
-        }
-        .animation(Motion.lift, value: cutout != nil)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
     }
 }

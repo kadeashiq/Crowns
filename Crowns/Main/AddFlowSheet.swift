@@ -6,7 +6,6 @@ import PhotosUI
 /// or pick a photo, then the same compact sheet.
 struct AddFlowSheet: View {
     let boxID: UUID?
-    let slot: Int?
     let onDone: (String?) -> Void
 
     @Environment(\.modelContext) private var context
@@ -15,40 +14,28 @@ struct AddFlowSheet: View {
     @State private var note = ""
 
     var body: some View {
-        ZStack {
-            if let model {
-                AddWatchSheet(model: model)
-                    .transition(.opacity)
-            } else {
-                chooser
-                    .transition(.opacity)
-            }
+        if let model {
+            AddWatchSheet(model: model)
+                .onDisappear { model.cancel() }
+        } else {
+            chooser
         }
-        .animation(Motion.standard, value: model == nil)
     }
 
     private var chooser: some View {
-        ZStack {
-            Theme.deskBackground
-            VStack(spacing: 14) {
-                HStack {
-                    Button {
-                        onDone(nil)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.body.weight(.semibold))
-                            .frame(width: 22, height: 22)
-                    }
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .accessibilityLabel("Cancel")
-                    Spacer()
-                }
-                Spacer()
-                Text("Add watch")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Theme.ink)
-                    .padding(.bottom, 10)
+        VStack(spacing: 0) {
+            Spacer()
+            Text("Add a watch")
+                .font(Typeface.title)
+                .foregroundStyle(Theme.ink)
+            Text("Paste a link from any shop, or choose a photo.")
+                .font(Typeface.secondary)
+                .foregroundStyle(Theme.inkSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.top, Space.xxs)
+            Spacer()
+
+            VStack(spacing: Space.sm) {
                 PasteButton(supportedContentTypes: [.url, .plainText]) { providers in
                     Task { @MainActor in
                         if let url = await ShareInputReader.firstURL(from: providers) {
@@ -60,23 +47,24 @@ struct AddFlowSheet: View {
                 }
                 .buttonBorderShape(.capsule)
                 .controlSize(.large)
+                .tint(Theme.ink)
+
                 PhotosPicker(selection: $photoItem, matching: .images) {
                     Label("Choose photo", systemImage: "photo")
-                        .frame(minWidth: 160)
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.glass)
-                .controlSize(.large)
+                .buttonStyle(.pill(.secondary))
+
                 if !note.isEmpty {
                     Text(note)
-                        .font(.footnote)
+                        .font(Typeface.caption)
                         .foregroundStyle(Theme.inkSecondary)
                 }
-                Spacer()
-                Spacer()
             }
-            .padding(20)
+            .padding(.horizontal, Space.lg)
+            .padding(.bottom, Space.lg)
         }
-        .preferredColorScheme(.dark)
+        .background(Theme.canvas)
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
             Task {
@@ -91,50 +79,8 @@ struct AddFlowSheet: View {
     }
 
     private func begin(_ source: AddWatchSource) {
-        let model = AddWatchModel(context: context, isExtension: false, boxID: boxID, slot: slot, finish: onDone)
+        let model = AddWatchModel(context: context, isExtension: false, boxID: boxID, finish: onDone)
         self.model = model
         Task { await model.start(source) }
-    }
-}
-
-/// A watch the share extension handed over because it couldn't take payment.
-struct PendingSaveSheet: View {
-    let request: PendingRequest
-    let onDone: (Bool) -> Void
-
-    @Environment(\.modelContext) private var context
-    @Environment(ProStore.self) private var store
-
-    var body: some View {
-        ZStack {
-            Theme.deskBackground
-            ScrollView {
-                PaywallView(store: store) { subscribed in
-                    if subscribed { commit() } else { PendingSaveStore.clear(); onDone(false) }
-                }
-            }
-        }
-        .preferredColorScheme(.dark)
-        .task {
-            // Already Pro, or under the limit after all: just save it.
-            await store.refresh()
-            if store.canAddWatch(in: context) { commit() }
-        }
-    }
-
-    private func commit() {
-        guard let loaded = PendingSaveStore.load() else {
-            onDone(false)
-            return
-        }
-        let pending = loaded.pending
-        let boxes = BoxSeeder.orderedBoxes(in: context)
-        guard let box = boxes.first(where: { $0.id == pending.boxID }) ?? boxes.first else {
-            onDone(false)
-            return
-        }
-        let saved = (try? WatchRecorder.save(pending.draft, photos: loaded.photos, coverIndex: pending.coverIndex, coverCutout: loaded.cutout, to: box, in: context)) != nil
-        PendingSaveStore.clear()
-        onDone(saved)
     }
 }

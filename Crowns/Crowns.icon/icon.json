@@ -1,0 +1,39 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "display-p3:0.00784,0.35686,0.19608,1.00000",
+      "srgb:0.01569,0.17647,0.10588,1.00000"
+    ]
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "Emblem.png",
+          "name" : "Emblem",
+          "position" : {
+            "scale" : 0.575,
+            "translation-in-points" : [
+              0.28750000000002274,
+              3.737500000000068
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

@@ -6,7 +6,7 @@
 
 // Your Apple Developer team ID (Xcode › Settings › Accounts). Leave empty to
 // choose it in the Signing & Capabilities tab instead.
-DEVELOPMENT_TEAM =
+DEVELOPMENT_TEAM = 96JNT63A49
 
 // Reverse-DNS prefix for every identifier below.
 CROWNS_BUNDLE_PREFIX = com.kadeashiq
@@ -16,7 +16,7 @@ CROWNS_APP_GROUP = group.$(CROWNS_BUNDLE_PREFIX).crowns
 CROWNS_CLOUDKIT_CONTAINER = iCloud.$(CROWNS_BUNDLE_PREFIX).crowns
 
 // Public privacy policy page, required for the App Store and linked from
-// the paywall and Settings. Draft text: docs/privacy.md. Leave empty to hide
+// Settings. Draft text: docs/privacy.md. Leave empty to hide
 // the links. xcconfig treats // as a comment, hence the $() between slashes:
 // CROWNS_PRIVACY_URL = https:/$()/example.com/crowns/privacy
 CROWNS_PRIVACY_URL =

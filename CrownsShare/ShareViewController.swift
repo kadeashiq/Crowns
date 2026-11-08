@@ -9,7 +9,7 @@ final class ShareViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(Theme.desk)
+        view.backgroundColor = Theme.uiCanvas
 
         let container = SharedStore.extensionContainer()
         self.container = container
@@ -31,5 +31,11 @@ final class ShareViewController: UIViewController {
             let input = await ShareInputReader.read(items)
             await model.start(.share(input))
         }
+    }
+
+    /// A swipe is the only way out, and the system won't end the request for us.
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        model?.cancel()
     }
 }

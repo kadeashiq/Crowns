@@ -4,110 +4,132 @@ import StoreKit
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.dismiss) private var dismiss
-    @Environment(ProStore.self) private var store
     @Environment(SyncMonitor.self) private var sync
 
     @Query(sort: [SortDescriptor(\Box.sortIndex), SortDescriptor(\Box.createdAt)]) private var boxes: [Box]
-    @Query private var watches: [Watch]
 
-    @State private var showPaywall = false
-    @State private var manageSubscription = false
     @State private var editingBox: BoxEditRequest?
-    @State private var showDiagnostics = false
-    @State private var restoreNote = ""
+    @State private var showDeveloperTools = false
+    @State private var showBoxOrder = false
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    if store.isPro {
-                        LabeledContent("Crowns Pro", value: "Active")
-                        Button("Manage subscription") { manageSubscription = true }
-                    } else {
-                        Button {
-                            showPaywall = true
-                        } label: {
-                            LabeledContent("Crowns Pro") {
-                                Text("\(min(watches.count, ProStore.freeLimit)) of \(ProStore.freeLimit) free")
-                            }
-                        }
-                        Button("Restore purchases") {
-                            Task { restoreNote = await store.restore() ? "" : "Nothing to restore" }
-                        }
+            VStack(spacing: 0) {
+                SheetHeader(title: "Settings")
+                ScrollView {
+                    VStack(spacing: Space.lg) {
+                        boxesSection
+                        iCloudSection
+                        aboutSection
                     }
-                } footer: {
-                    if !restoreNote.isEmpty { Text(restoreNote) }
+                    .padding(.horizontal, Space.md)
+                    .padding(.top, Space.xs)
+                    .padding(.bottom, Space.xl)
                 }
-
-                Section("Boxes") {
-                    ForEach(boxes) { box in
-                        Button {
-                            editingBox = BoxEditRequest(box: box)
-                        } label: {
-                            LabeledContent(box.name) {
-                                Text("\(box.watches?.count ?? 0)")
-                                    .monospacedDigit()
-                            }
-                        }
-                    }
-                    .onMove(perform: moveBoxes)
-                    Button("New box") { editingBox = BoxEditRequest(box: nil) }
-                }
-
-                Section("iCloud") {
-                    LabeledContent("Sync", value: sync.statusText)
-                    if let last = sync.lastSync {
-                        LabeledContent("Last synced") {
-                            Text(last, format: .relative(presentation: .named))
-                        }
-                    }
-                    if let error = sync.lastError {
-                        Text(error)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section {
-                    if showDiagnostics {
-                        NavigationLink("Diagnostics") { DiagnosticsView() }
-                    }
-                    if let privacy = AppLinks.privacy {
-                        Link("Privacy", destination: privacy)
-                    }
-                    Link("Terms of use", destination: AppLinks.terms)
-                    LabeledContent("Version", value: version)
-                }
+                .scrollIndicators(.hidden)
             }
-            .scrollContentBackground(.hidden)
-            .background(Theme.desk)
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { EditButton() }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-            .sheet(isPresented: $showPaywall) {
-                ZStack {
-                    Theme.deskBackground
-                    ScrollView {
-                        PaywallView(store: store) { _ in showPaywall = false }
-                    }
-                }
-                .presentationDetents([.medium, .large])
+            .background(Theme.canvas)
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showBoxOrder) {
+                BoxOrderSheet()
+                    .presentationDetents([.medium, .large])
+                    .crownsSheet()
             }
             .sheet(item: $editingBox) { request in
                 BoxEditorSheet(box: request.box) { _ in editingBox = nil }
+                    .crownsSheet()
             }
-            .manageSubscriptionsSheet(isPresented: $manageSubscription)
         }
-        .preferredColorScheme(.dark)
         .task {
             await sync.checkAccount()
-            showDiagnostics = await Self.isDevelopmentBuild()
+            showDeveloperTools = await Self.isDevelopmentBuild()
+        }
+    }
+
+    // MARK: - Sections
+
+    private var boxesSection: some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            HStack {
+                SectionLabel(text: "Boxes")
+                Spacer()
+                if boxes.count > 1 {
+                    Button("Reorder") { showBoxOrder = true }
+                    .font(Typeface.label)
+                    .foregroundStyle(Theme.ink)
+                    .buttonStyle(PressableStyle())
+                }
+            }
+            Card(padding: 0) {
+                VStack(spacing: 0) {
+                    ForEach(Array(boxes.enumerated()), id: \.element.id) { index, box in
+                        if index > 0 { RowDivider() }
+                        boxRow(box)
+                    }
+                    RowDivider()
+                    Button { editingBox = BoxEditRequest(box: nil) } label: {
+                        ValueRow(title: "New box") {
+                            Image(systemName: "plus")
+                        }
+                    }
+                    .buttonStyle(PressableStyle())
+                }
+            }
+        }
+    }
+
+    private func boxRow(_ box: Box) -> some View {
+        Button { editingBox = BoxEditRequest(box: box) } label: {
+            ValueRow(title: box.name, showsChevron: true) {
+                Text("\(box.watches?.count ?? 0)").monospacedDigit()
+            }
+        }
+        .buttonStyle(PressableStyle())
+    }
+
+    private var iCloudSection: some View {
+        FormSection(title: "iCloud", footer: sync.lastError ?? "", padding: 0) {
+            VStack(spacing: 0) {
+                ValueRow(title: "Sync", value: sync.statusText)
+                if let last = sync.lastSync {
+                    RowDivider()
+                    ValueRow(title: "Last synced") {
+                        Text(last, format: .relative(presentation: .named))
+                    }
+                }
+            }
+        }
+    }
+
+    private var aboutSection: some View {
+        FormSection(padding: 0) {
+            VStack(spacing: 0) {
+                if showDeveloperTools {
+                    NavigationLink { DesignSystemView() } label: {
+                        ValueRow(title: "Design system", showsChevron: true)
+                    }
+                    .buttonStyle(PressableStyle())
+                    RowDivider()
+                    NavigationLink { DiagnosticsView() } label: {
+                        ValueRow(title: "Diagnostics", showsChevron: true)
+                    }
+                    .buttonStyle(PressableStyle())
+                    RowDivider()
+                }
+                if let privacy = AppLinks.privacy {
+                    Link(destination: privacy) {
+                        ValueRow(title: "Privacy", showsChevron: true)
+                    }
+                    .buttonStyle(PressableStyle())
+                    RowDivider()
+                }
+                Link(destination: AppLinks.terms) {
+                    ValueRow(title: "Terms of use", showsChevron: true)
+                }
+                .buttonStyle(PressableStyle())
+                RowDivider()
+                ValueRow(title: "Version", value: version)
+            }
         }
     }
 
@@ -118,14 +140,7 @@ struct SettingsView: View {
         return "\(short) (\(build))"
     }
 
-    private func moveBoxes(from source: IndexSet, to destination: Int) {
-        var ordered = boxes
-        ordered.move(fromOffsets: source, toOffset: destination)
-        for (index, box) in ordered.enumerated() { box.sortIndex = index }
-        try? context.save()
-    }
-
-    /// Diagnostics show in debug and TestFlight builds, never on the App Store.
+    /// Developer tools show in debug and TestFlight builds, never on the App Store.
     private static func isDevelopmentBuild() async -> Bool {
         #if DEBUG
         return true
@@ -134,5 +149,15 @@ struct SettingsView: View {
         guard case .verified(let transaction)? = result else { return false }
         return transaction.environment != .production
         #endif
+    }
+}
+
+enum AppLinks {
+    static let terms = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
+    /// Set CROWNS_PRIVACY_URL in Config/Crowns.xcconfig. Nil hides the link.
+    static var privacy: URL? {
+        guard let raw = Bundle.main.object(forInfoDictionaryKey: "CrownsPrivacyURL") as? String,
+              raw.hasPrefix("https://") else { return nil }
+        return URL(string: raw)
     }
 }

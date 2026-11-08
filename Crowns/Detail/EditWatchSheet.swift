@@ -24,95 +24,123 @@ struct EditWatchSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Brand", text: $brand)
-                    TextField("Model", text: $model)
-                    TextField("Reference", text: $reference)
-                        .font(.body.monospaced())
-                }
-                .textInputAutocapitalization(.words)
-                .autocorrectionDisabled()
-
-                Section {
-                    HStack(spacing: 4) {
-                        Text("£").foregroundStyle(.secondary)
-                        TextField("Price", text: $price).keyboardType(.decimalPad)
-                    }
-                } footer: {
-                    if !watch.priceNote.isEmpty { Text(watch.priceNote) }
-                }
-
-                let photos = watch.sortedPhotos
-                if photos.count > 1 {
-                    Section("Cover") {
-                        ScrollView(.horizontal) {
-                            HStack(spacing: 10) {
-                                ForEach(photos) { photo in
-                                    Button {
-                                        coverPhotoID = photo.id
-                                    } label: {
-                                        DecodedImage(key: photo.id.uuidString, data: photo.data, maxPixel: 360, contentMode: .fill)
-                                            .frame(width: 72, height: 72)
-                                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                                    .strokeBorder(Theme.brass, lineWidth: coverPhotoID == photo.id ? 2 : 0)
-                                            )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        .scrollIndicators(.hidden)
-                    }
-                }
-
-                Section("Specs") {
-                    ForEach($specs) { $spec in
-                        HStack {
-                            TextField("Label", text: $spec.label)
-                                .foregroundStyle(.secondary)
-                            TextField("Value", text: $spec.value)
-                                .multilineTextAlignment(.trailing)
-                        }
-                    }
-                    .onDelete { specs.remove(atOffsets: $0) }
-                    Button("Add spec") { specs.append(EditableSpec(label: "", value: "")) }
-                }
-
-                Section("Notes") {
-                    TextField("Notes", text: $notes, axis: .vertical)
-                        .lineLimit(3...10)
-                }
-
-                Section("Source") {
-                    TextField("Link", text: $source)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+        VStack(spacing: 0) {
+            SheetHeader(title: "Edit") {
+                if working {
+                    ProgressView().frame(width: 72, height: 40)
+                } else {
+                    Button("Save") { Task { await save() } }
+                        .buttonStyle(.pill(.primary, size: .small))
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(Theme.desk)
-            .navigationTitle("Edit")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    if working {
-                        ProgressView()
-                    } else {
-                        Button("Save") { Task { await save() } }
+
+            ScrollView {
+                VStack(spacing: Space.lg) {
+                    FormSection(title: "Watch") {
+                        VStack(spacing: Space.xs) {
+                            TextField("Brand", text: $brand).filledField()
+                            TextField("Model", text: $model).filledField()
+                            TextField("Reference", text: $reference)
+                                .filledField()
+                                .font(.body.monospaced())
+                        }
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                    }
+
+                    FormSection(title: "Price", footer: watch.priceNote) {
+                        HStack(spacing: 4) {
+                            Text("£").foregroundStyle(Theme.inkSecondary)
+                            TextField("Price", text: $price).keyboardType(.decimalPad)
+                        }
+                        .filledField()
+                    }
+
+                    let photos = watch.sortedPhotos
+                    if photos.count > 1 {
+                        coverPicker(photos)
+                    }
+
+                    specsSection
+
+                    FormSection(title: "Notes") {
+                        TextField("Notes", text: $notes, axis: .vertical)
+                            .lineLimit(3...10)
+                            .padding(.vertical, Space.sm)
+                            .filledField()
+                    }
+
+                    FormSection(title: "Source") {
+                        TextField("Link", text: $source)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .filledField()
                     }
                 }
+                .padding(.horizontal, Space.md)
+                .padding(.top, Space.xs)
+                .padding(.bottom, Space.xl)
+            }
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .background(Theme.canvas)
+        .onAppear(perform: load)
+    }
+
+    private func coverPicker(_ photos: [WatchPhoto]) -> some View {
+        FormSection(title: "Cover") {
+            ScrollView(.horizontal) {
+                HStack(spacing: Space.sm) {
+                    ForEach(photos) { photo in
+                        let selected = coverPhotoID == photo.id
+                        Button {
+                            Haptics.tick()
+                            coverPhotoID = photo.id
+                        } label: {
+                            DecodedImage(key: photo.id.uuidString, data: photo.data, maxPixel: 360, contentMode: .fill)
+                                .frame(width: 72, height: 72)
+                                .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                                .padding(3)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: Radius.sm + 3, style: .continuous)
+                                        .strokeBorder(Theme.ink, lineWidth: selected ? 2 : 0)
+                                )
+                        }
+                        .buttonStyle(PressableStyle())
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    private var specsSection: some View {
+        FormSection(title: "Specs") {
+            VStack(spacing: Space.xs) {
+                ForEach($specs) { $spec in
+                    HStack(spacing: Space.xs) {
+                        TextField("Label", text: $spec.label).filledField()
+                        TextField("Value", text: $spec.value).filledField()
+                        Button {
+                            let id = spec.id
+                            specs.removeAll { $0.id == id }
+                        } label: {
+                            Image(systemName: "minus")
+                        }
+                        .buttonStyle(.circle(.flat, diameter: 36))
+                        .accessibilityLabel("Remove spec")
+                    }
+                }
+                Button {
+                    specs.append(EditableSpec(label: "", value: ""))
+                } label: {
+                    Label("Add spec", systemImage: "plus")
+                }
+                .buttonStyle(.pill(.quiet, size: .small))
             }
         }
-        .onAppear(perform: load)
     }
 
     private func load() {
@@ -144,15 +172,14 @@ struct EditWatchSheet: View {
             .map { Spec(label: $0.label.trimmingCharacters(in: .whitespaces), value: $0.value.trimmingCharacters(in: .whitespaces)) }
             .filter { !$0.label.isEmpty && !$0.value.isEmpty }
 
-        // A new cover: move it to the front and lift it out again.
+        // A new cover: move it to the front.
         let photos = watch.sortedPhotos
         if let coverPhotoID, coverPhotoID != photos.first?.id, let chosen = photos.first(where: { $0.id == coverPhotoID }), let data = chosen.data {
             var reordered = photos
             reordered.removeAll { $0.id == coverPhotoID }
             reordered.insert(chosen, at: 0)
             for (index, photo) in reordered.enumerated() { photo.index = index }
-            let cutout = await CutoutMaker.cutout(from: data)
-            WatchRecorder.setCover(of: watch, photo: data, cutout: cutout)
+            WatchRecorder.setCover(of: watch, photo: data)
         }
         try? context.save()
         working = false

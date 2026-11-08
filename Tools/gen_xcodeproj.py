@@ -8,7 +8,7 @@ Target membership is by folder:
     CrownsShare/   share extension
     Shared/        compiled into the app, the extension and the tests
     CrownsTests/   unit tests (Swift Testing), Fixtures/ as resources
-    Config/        xcconfig, Info.plists, entitlements, StoreKit config (not compiled)
+    Config/        xcconfig, Info.plists, entitlements (not compiled)
 
 Re-run after adding or removing files. Adding files in Xcode also works; the
 next run of this script picks them up from disk either way. Object IDs are
@@ -40,9 +40,9 @@ FILE_TYPES = {
     ".entitlements": "text.plist.entitlements",
     ".xcconfig": "text.xcconfig",
     ".xcassets": "folder.assetcatalog",
+    ".icon": "folder.iconcomposer.icon",
     ".md": "net.daringfireball.markdown",
     ".xcprivacy": "text.xml",
-    ".storekit": "text",
 }
 
 TOP_GROUPS = ["Crowns", "CrownsShare", "Shared", "CrownsTests", "Config"]
@@ -61,13 +61,13 @@ def walk(rel):
     gid = oid("group", rel)
     children = []
     full = os.path.join(ROOT, rel)
-    for name in sorted(os.listdir(full), key=lambda n: (not os.path.isdir(os.path.join(full, n)) or n.endswith(".xcassets"), n.lower())):
+    for name in sorted(os.listdir(full), key=lambda n: (not os.path.isdir(os.path.join(full, n)) or n.endswith((".xcassets", ".icon")), n.lower())):
         if name.startswith(".") or name == "node_modules":
             continue
         child_rel = os.path.join(rel, name)
         child_full = os.path.join(ROOT, child_rel)
         ext = os.path.splitext(name)[1]
-        if os.path.isdir(child_full) and ext != ".xcassets":
+        if os.path.isdir(child_full) and ext not in (".xcassets", ".icon"):
             children.append(walk(child_rel))
         elif ext in FILE_TYPES:
             fid = oid("file", child_rel)
@@ -100,7 +100,7 @@ main_group = add(oid("group", "<main>"), "PBXGroup", children=top + [products_gr
 MEMBERSHIP = {
     "Crowns": {
         "sources": matching(["Crowns", "Shared"], {".swift"}),
-        "resources": matching(["Crowns"], {".xcassets", ".xcprivacy"}) + matching(["Shared"], {".js"}),
+        "resources": matching(["Crowns"], {".xcassets", ".icon", ".xcprivacy"}) + matching(["Shared"], {".js"}),
     },
     "CrownsShare": {
         "sources": matching(["CrownsShare", "Shared"], {".swift"}),
@@ -161,7 +161,7 @@ RELEASE = {
 }
 TARGET_SETTINGS = {
     "Crowns": {
-        "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+        "ASSETCATALOG_COMPILER_APPICON_NAME": "Crowns",
         "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
         "CODE_SIGN_ENTITLEMENTS": "Config/Crowns.entitlements",
         "CODE_SIGN_STYLE": "Automatic",
