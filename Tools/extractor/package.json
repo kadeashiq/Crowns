@@ -1,0 +1,7 @@
+{
+  "name": "crowns-extractor-tests",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node run.mjs" },
+  "devDependencies": { "jsdom": "^25.0.1" }
+}

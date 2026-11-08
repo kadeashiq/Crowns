@@ -1,0 +1,93 @@
+{
+  "v": 1,
+  "url": "https://northerntime.example/products/tudor-black-bay-58-m79030n",
+  "title": "Tudor Black Bay 58 M79030N-0001 – Northern Time Co.",
+  "lang": "en",
+  "canonical": "https://northerntime.example/products/tudor-black-bay-58-m79030n",
+  "h1": "Tudor Black Bay 58 M79030N-0001",
+  "metaImages": [
+    "http://northerntime.example/cdn/shop/files/bb58-front.jpg?v=1700000000",
+    "https://northerntime.example/cdn/shop/files/bb58-front.jpg?v=1700000000"
+  ],
+  "meta": {
+    "og:site_name": "Northern Time Co.",
+    "og:url": "https://northerntime.example/products/tudor-black-bay-58-m79030n",
+    "og:title": "Tudor Black Bay 58 M79030N-0001",
+    "og:type": "product",
+    "og:image": "http://northerntime.example/cdn/shop/files/bb58-front.jpg?v=1700000000",
+    "og:image:secure_url": "https://northerntime.example/cdn/shop/files/bb58-front.jpg?v=1700000000",
+    "og:price:amount": "3,150.00",
+    "og:price:currency": "GBP"
+  },
+  "jsonld": [
+    {
+      "@context": "http://schema.org/",
+      "@type": "Product",
+      "name": "Tudor Black Bay 58 M79030N-0001",
+      "url": "https://northerntime.example/products/tudor-black-bay-58-m79030n",
+      "image": [
+        "https://northerntime.example/cdn/shop/files/bb58-front.jpg?v=1700000000&width=1920"
+      ],
+      "description": "39mm steel case, black dial, MT5402 manufacture calibre, 70 hour power reserve. Box and papers.",
+      "sku": "NT-1042",
+      "brand": {
+        "@type": "Brand",
+        "name": "Northern Time Co."
+      },
+      "offers": [
+        {
+          "@type": "Offer",
+          "sku": "NT-1042",
+          "availability": "http://schema.org/InStock",
+          "price": 3150,
+          "priceCurrency": "GBP",
+          "url": "https://northerntime.example/products/tudor-black-bay-58-m79030n?variant=1"
+        }
+      ]
+    }
+  ],
+  "shopify": {
+    "title": "Tudor Black Bay 58 M79030N-0001",
+    "vendor": "Tudor",
+    "type": "Watch",
+    "price": 315000,
+    "priceString": null,
+    "sku": "NT-1042",
+    "images": [
+      "https://northerntime.example/cdn/shop/files/bb58-front.jpg?v=1700000000",
+      "https://northerntime.example/cdn/shop/files/bb58-side_800x.jpg?v=1700000001"
+    ],
+    "description": "39mm steel case"
+  },
+  "microdata": {},
+  "specs": [
+    [
+      "Case size",
+      "39mm"
+    ],
+    [
+      "Movement",
+      "Automatic, calibre MT5402"
+    ],
+    [
+      "Power reserve",
+      "70 hours"
+    ],
+    [
+      "Lug width",
+      "20mm"
+    ]
+  ],
+  "priceTexts": [
+    "£3,150.00 GBP"
+  ],
+  "images": [
+    {
+      "src": "https://northerntime.example/cdn/shop/files/bb58-front.jpg?v=1700000000&width=1500",
+      "w": 1500,
+      "h": 1500,
+      "alt": "Tudor Black Bay 58"
+    }
+  ],
+  "text": "Tudor Black Bay 58 M79030N-0001 £3,150.00 GBP Case size39mmMovementAutomatic, calibre MT5402Power reserve70 hoursLug width20mm"
+}

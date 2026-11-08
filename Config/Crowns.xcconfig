@@ -1,0 +1,21 @@
+// Crowns build configuration.
+//
+// Set these before the first device build. The App Group and iCloud container
+// are registered with Apple the first time Xcode signs the app, and neither
+// can be deleted afterwards, so pick a prefix you're happy to keep.
+
+// Your Apple Developer team ID (Xcode › Settings › Accounts). Leave empty to
+// choose it in the Signing & Capabilities tab instead.
+DEVELOPMENT_TEAM =
+
+// Reverse-DNS prefix for every identifier below.
+CROWNS_BUNDLE_PREFIX = com.kadeashiq
+
+CROWNS_APP_BUNDLE_ID = $(CROWNS_BUNDLE_PREFIX).crowns
+CROWNS_APP_GROUP = group.$(CROWNS_BUNDLE_PREFIX).crowns
+CROWNS_CLOUDKIT_CONTAINER = iCloud.$(CROWNS_BUNDLE_PREFIX).crowns
+
+MARKETING_VERSION = 0.1
+CURRENT_PROJECT_VERSION = 1
+IPHONEOS_DEPLOYMENT_TARGET = 26.0
+SWIFT_VERSION = 5.0
