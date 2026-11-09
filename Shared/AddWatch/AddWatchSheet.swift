@@ -69,7 +69,6 @@ struct AddWatchForm: View {
             if let photoActions {
                 Section { photoActions }
             }
-            photoSuggestions
             boxSection
             detailsSection
             specsSection
@@ -173,31 +172,6 @@ struct AddWatchForm: View {
         .buttonStyle(.borderless)
         .accessibilityLabel("Photo \(number)")
         .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    /// What the photo might show. Tapping one fills in the fields.
-    @ViewBuilder
-    private var photoSuggestions: some View {
-        if model.isIdentifying {
-            Section {
-                HStack(spacing: Space.xs) {
-                    ProgressView()
-                    Text("Looking at your watch…")
-                        .foregroundStyle(.secondary)
-                }
-            }
-        } else if !model.suggestions.isEmpty {
-            Section("Might be") {
-                ScrollView(.horizontal) {
-                    HStack(spacing: Space.xs) {
-                        ForEach(model.suggestions) { match in
-                            ChipButton(title: match.title, flat: true) { model.apply(match) }
-                        }
-                    }
-                }
-                .scrollIndicators(.hidden)
-            }
-        }
     }
 
     // MARK: - Fields

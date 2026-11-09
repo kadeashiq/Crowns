@@ -1,7 +1,6 @@
 import Foundation
 
-/// Brands and model families offered while typing a watch in by hand, and
-/// used to keep photo suggestions to watches that exist.
+/// Brands and model families offered while typing a watch in by hand.
 enum WatchCatalog {
     /// A suggestion to fill in. `model` is empty when only the brand is known.
     struct Match: Identifiable, Hashable {
@@ -119,31 +118,6 @@ enum WatchCatalog {
         guard !key.isEmpty else { return Array(pool.prefix(limit)) }
         guard !pool.contains(where: { fold($0.model) == key }) else { return [] }
         return Array(ranked(pool, by: \.model, key: key).prefix(limit))
-    }
-
-    /// The catalogue's spelling of a brand, or nil if it isn't a known one.
-    static func knownBrand(_ raw: String) -> String? {
-        let key = fold(WatchBrands.canonical(raw) ?? raw)
-        return brands.first { fold($0) == key }
-    }
-
-    /// The catalogue's spelling of a model family, or nil if it isn't one.
-    static func knownModel(_ raw: String, brand: String) -> String? {
-        let key = fold(raw)
-        return families.first { fold($0.brand) == fold(brand) }?.models.first { fold($0) == key }
-    }
-
-    /// Everything named in text printed on a dial, best match first.
-    static func matches(inDialText text: String) -> [Match] {
-        brands.compactMap { brand -> (Match, String.Index)? in
-            guard let range = WatchBrands.wordRange(of: brand, in: text) else { return nil }
-            let found = families.first { $0.brand == brand }?.models
-                .filter { WatchBrands.wordRange(of: $0, in: text) != nil }
-                .max { $0.count < $1.count }
-            return (Match(brand: brand, model: found ?? ""), range.lowerBound)
-        }
-        .sorted { $0.1 < $1.1 }
-        .map(\.0)
     }
 
     /// Names starting with what's typed come first, then names with a later word that does.

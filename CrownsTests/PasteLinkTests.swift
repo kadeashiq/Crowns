@@ -42,17 +42,6 @@ struct WatchCatalogTests {
         #expect(WatchCatalog.models(matching: "submar", brand: "").first?.brand == "Rolex")
         #expect(WatchCatalog.models(matching: "s", brand: "").isEmpty)
     }
-
-    @Test func readsNamesPrintedOnADial() {
-        let found = WatchCatalog.matches(inDialText: "OMEGA\nSpeedmaster Professional\nAutomatic")
-        #expect(found.first == WatchCatalog.Match(brand: "Omega", model: "Speedmaster Professional"))
-    }
-
-    @Test func dropsGuessesThatDontExist() {
-        #expect(WatchPhotoIdentifier.grounded(brand: "Acme Timepieces", model: "Submariner") == nil)
-        #expect(WatchPhotoIdentifier.grounded(brand: "rolex", model: "Nautilus") == WatchCatalog.Match(brand: "Rolex"))
-        #expect(WatchPhotoIdentifier.grounded(brand: "Rolex", model: "submariner") == WatchCatalog.Match(brand: "Rolex", model: "Submariner"))
-    }
 }
 
 struct EditableSpecTests {

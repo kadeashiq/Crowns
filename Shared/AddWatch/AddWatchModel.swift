@@ -80,15 +80,11 @@ final class AddWatchModel {
     var isManual = false
     /// The camera is up. The sheet behind it mustn't count as closed.
     var isTakingPhoto = false
-    /// What the photo might show, offered as a tap to fill in.
-    var suggestions: [WatchCatalog.Match] = []
-    var isIdentifying = false
 
     let isExtension: Bool
 
     @ObservationIgnored private var draft = ListingDraft()
     @ObservationIgnored private var photoTask: Task<[ImageFetcher.Photo], Never>?
-    @ObservationIgnored private var identifyTask: Task<Void, Never>?
     @ObservationIgnored private var finished = false
     @ObservationIgnored var hostView: UIView?
     private let context: ModelContext
@@ -154,7 +150,7 @@ final class AddWatchModel {
         }
     }
 
-    /// Uses this photo for a watch added by hand and looks for what it shows.
+    /// Uses this photo for a watch added by hand.
     func setPhoto(_ data: Data) {
         guard let photo = ImageFetcher.photo(from: data) else {
             errorText = "Couldn't read that photo"
@@ -163,15 +159,6 @@ final class AddWatchModel {
         errorText = ""
         photos = [photo]
         visiblePhotoID = photo.id
-        suggestions = []
-        isIdentifying = true
-        identifyTask?.cancel()
-        identifyTask = Task {
-            let found = await WatchPhotoIdentifier.suggestions(for: photo.data)
-            guard !Task.isCancelled else { return }
-            suggestions = found
-            isIdentifying = false
-        }
     }
 
     /// Specs the form doesn't already show, to offer under Add spec.
@@ -284,7 +271,6 @@ final class AddWatchModel {
     /// Stops any work in progress and leaves the sheet as it is.
     func stop() {
         photoTask?.cancel()
-        identifyTask?.cancel()
     }
 
     private func finish(_ message: String?) {
