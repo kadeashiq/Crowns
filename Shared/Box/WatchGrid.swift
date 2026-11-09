@@ -26,6 +26,18 @@ struct GridMetrics {
         let phoneWidth: CGFloat = 402
         return max(preferred, Int(width / (phoneWidth / CGFloat(preferred))))
     }
+
+    /// Decode sizes for a card's photo, smallest first.
+    static let imageSteps = [240, 400, 560, 800]
+
+    /// The pixels a card's photo needs along its longer side, in a grid this
+    /// wide. Rounded up to a step, so nearby widths share one decoded image.
+    func imagePixels(forWidth width: CGFloat, columns: Int, scale: CGFloat) -> Int {
+        let columns = max(columns, 1)
+        let card = (width - Space.md * 2 - Space.sm * CGFloat(columns - 1)) / CGFloat(columns)
+        let longest = max(card, card / aspectRatio) * scale
+        return GridMetrics.imageSteps.first { CGFloat($0) >= longest } ?? GridMetrics.imageSteps[GridMetrics.imageSteps.count - 1]
+    }
 }
 
 /// The box's watches as a grid of cards. On iOS 27 and later, press and drag
@@ -65,12 +77,14 @@ struct WatchGrid<Cell: View>: View {
 struct WatchCell: View {
     let watch: Watch
     let metrics: GridMetrics
+    /// See `GridMetrics.imagePixels`.
+    var imagePixels: Int?
     let onOpen: () -> Void
 
     var body: some View {
         Button(action: onOpen) {
             VStack(spacing: 0) {
-                WatchImage(watch: watch)
+                WatchImage(watch: watch, pixels: imagePixels)
                 if metrics.showsCaption { caption }
             }
             .clipShape(.rect(cornerRadius: metrics.cardRadius, style: .continuous))

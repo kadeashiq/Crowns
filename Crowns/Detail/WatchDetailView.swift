@@ -18,7 +18,7 @@ struct WatchDetailView: View {
                 WatchImage(watch: watch, size: .full)
                     // Shorter on a short screen, so the name stays in view.
                     .containerRelativeFrame(.vertical) { height, _ in
-                        min(watch.coverData == nil ? 220 : 460, height * 0.62)
+                        min(watch.hasCover ? 460 : 220, height * 0.62)
                     }
                     .accessibilityLabel(watch.displayName)
                 info
@@ -81,7 +81,7 @@ struct WatchDetailView: View {
                 ScrollView(.horizontal) {
                     HStack(spacing: Space.sm) {
                         ForEach(photos) { photo in
-                            DecodedImage(key: photo.id.uuidString, data: photo.data, maxPixel: 360, contentMode: .fill)
+                            DecodedImage(key: photo.id.uuidString, bytes: .photo(photo), maxPixel: 360, contentMode: .fill)
                                 .frame(width: 104, height: 104)
                                 .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
                                 .surface(radius: Radius.md)
@@ -92,10 +92,11 @@ struct WatchDetailView: View {
                 .scrollClipDisabled()
             }
 
-            if !watch.specs.isEmpty {
+            let specs = watch.specs
+            if !specs.isEmpty {
                 FormSection(title: "Specs", padding: 0) {
                     VStack(spacing: 0) {
-                        ForEach(Array(watch.specs.enumerated()), id: \.element.id) { index, spec in
+                        ForEach(Array(specs.enumerated()), id: \.element.id) { index, spec in
                             if index > 0 { RowDivider() }
                             SpecRow(spec: spec)
                         }

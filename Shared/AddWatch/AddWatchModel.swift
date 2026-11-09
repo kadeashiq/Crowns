@@ -80,11 +80,16 @@ final class AddWatchModel {
     var isManual = false
     /// The camera is up. The sheet behind it mustn't count as closed.
     var isTakingPhoto = false
+    /// The slower readers are still going through the page.
+    private var isEnriching = false
 
     let isExtension: Bool
 
     @ObservationIgnored private var draft = ListingDraft()
-    @ObservationIgnored private var photoTask: Task<[ImageFetcher.Photo], Never>?
+    @ObservationIgnored private var startTask: Task<Void, Never>?
+    @ObservationIgnored private var photoTask: Task<Void, Never>?
+    @ObservationIgnored private var enrichTask: Task<Void, Never>?
+    @ObservationIgnored private var priceTask: Task<Void, Never>?
     @ObservationIgnored private var finished = false
     @ObservationIgnored var hostView: UIView?
     private let context: ModelContext
@@ -101,7 +106,12 @@ final class AddWatchModel {
         loadBoxes(preferred: boxID)
     }
 
-    var canSave: Bool { stage == .ready && !photosLoading && (!isManual || hasDetails) }
+    /// From a page, the first photo is enough: the rest are only alternatives.
+    var canSave: Bool {
+        guard stage == .ready else { return false }
+        if isManual { return !photosLoading && hasDetails }
+        return !photosLoading || !photos.isEmpty
+    }
 
     private var hasDetails: Bool {
         !photos.isEmpty || !brand.trimmingCharacters(in: .whitespaces).isEmpty || !model.trimmingCharacters(in: .whitespaces).isEmpty
@@ -111,6 +121,7 @@ final class AddWatchModel {
     var loadingMessage: String? {
         if stage == .reading { return "Reading listing…" }
         if photosLoading { return "Getting photos…" }
+        if isEnriching, photos.isEmpty, brand.isEmpty, model.isEmpty { return "Reading listing…" }
         return nil
     }
 
@@ -120,7 +131,7 @@ final class AddWatchModel {
     }
 
     private func loadBoxes(preferred: UUID?) {
-        BoxSeeder.ensureDefaults(in: context)
+        BoxSeeder.ensureDefaults(in: context, merging: !isExtension)
         let list = BoxSeeder.orderedBoxes(in: context)
         boxes = list.map { BoxChoice(id: $0.id, name: $0.name) }
         let last = AppGroup.defaults.string(forKey: SharedKeys.lastBoxID).flatMap(UUID.init(uuidString:))
@@ -133,16 +144,13 @@ final class AddWatchModel {
 
     // MARK: - Reading
 
-    func start(_ source: AddWatchSource) async {
-        // Let the sheet's anchor view appear so the web reader has a window.
-        for _ in 0..<10 where hostView == nil {
-            try? await Task.sleep(for: .milliseconds(30))
-        }
+    func start(_ source: AddWatchSource) {
+        guard !finished else { return }
         switch source {
         case .share(let input):
-            await read(snapshotJSON: input.snapshotJSON, url: input.url)
+            startTask = Task { await read(snapshotJSON: input.snapshotJSON, url: input.url) }
         case .link(let url):
-            await read(snapshotJSON: nil, url: url)
+            startTask = Task { await read(snapshotJSON: nil, url: url) }
         case .manual:
             isManual = true
             stage = .ready
@@ -152,13 +160,18 @@ final class AddWatchModel {
 
     /// Uses this photo for a watch added by hand.
     func setPhoto(_ data: Data) {
-        guard let photo = ImageFetcher.photo(from: data) else {
-            errorText = "Couldn't read that photo"
-            return
+        photosLoading = true
+        Task {
+            let photo = await ImageFetcher.preparedPhoto(from: data)
+            photosLoading = false
+            guard let photo else {
+                errorText = "Couldn't read that photo"
+                return
+            }
+            errorText = ""
+            photos = [photo]
+            visiblePhotoID = photo.id
         }
-        errorText = ""
-        photos = [photo]
-        visiblePhotoID = photo.id
     }
 
     /// Specs the form doesn't already show, to offer under Add spec.
@@ -178,32 +191,91 @@ final class AddWatchModel {
     }
 
     private func read(snapshotJSON: String?, url: URL?) async {
-        let outcome = await ExtractionPipeline.run(snapshotJSON: snapshotJSON, url: url, host: hostView)
-        draft = outcome.draft
+        FoundationModelsFallback.prewarm()
+        if snapshotJSON == nil {
+            // Let the sheet's anchor view appear so the web reader has a window.
+            for _ in 0..<10 where hostView == nil {
+                try? await Task.sleep(for: .milliseconds(30))
+            }
+        }
+        let reading = await ExtractionPipeline.read(snapshotJSON: snapshotJSON, url: url, host: hostView)
+        guard !Task.isCancelled else { return }
+        draft = reading.draft
         brand = draft.brand
         model = draft.model
         reference = draft.reference
         priceText = PriceFormatter.editingText(pence: draft.price?.pence)
-        priceNote = draft.priceNote
         specs = EditableSpec.merging(draft.specs)
         stage = .ready
+        convertPrice()
 
+        let linkPreview = reading.needsLinkPreview ? reading.draft.sourceURL.map { link in
+            Task { await LinkPreviewFallback.fetch(link) }
+        } : nil
         let urls = draft.imageURLs
         let referer = draft.sourceURL
-        let extra = outcome.extraImage
-        let task = Task { () -> [ImageFetcher.Photo] in
-            var photos = await ImageFetcher.photos(from: urls, referer: referer)
-            if photos.isEmpty, let extra, let photo = ImageFetcher.photo(from: extra) {
-                photos = [photo]
+        photoTask = Task {
+            await ImageFetcher.photos(from: urls, referer: referer) { [weak self] photo in
+                self?.add(photo)
             }
-            return photos
+            if photos.isEmpty, let extra = await linkPreview?.value?.imageData,
+               let photo = await ImageFetcher.preparedPhoto(from: extra) {
+                add(photo)
+            }
+            photosLoading = false
         }
-        photoTask = task
-        let loaded = await task.value
-        photos = loaded
-        photosLoading = false
+        isEnriching = true
+        enrichTask = Task {
+            await ExtractionPipeline.enrich(reading, preview: await linkPreview?.value) { [weak self] found in
+                self?.merge(found)
+            }
+            isEnriching = false
+        }
+    }
+
+    /// Photos only ever join the end, so the one in view never moves.
+    private func add(_ photo: ImageFetcher.Photo) {
+        photos.append(photo)
         if visiblePhotoID == nil {
-            visiblePhotoID = loaded.first?.id
+            visiblePhotoID = photo.id
+        }
+    }
+
+    /// Takes what a slower reader found. The form is open by now, so this
+    /// only fills what's still empty and never replaces anything typed.
+    private func merge(_ found: ListingDraft) {
+        if brand.isEmpty { brand = found.brand }
+        if model.isEmpty { model = found.model }
+        if reference.isEmpty { reference = found.reference }
+        for spec in found.specs {
+            if let index = specs.firstIndex(where: { $0.label == spec.label }) {
+                if specs[index].value.isEmpty { specs[index].value = spec.value }
+            } else {
+                specs.append(EditableSpec(label: spec.label, value: spec.value))
+            }
+        }
+        if draft.price == nil, let price = found.price {
+            draft.price = price
+            if priceText.isEmpty { priceText = PriceFormatter.editingText(pence: price.pence) }
+            convertPrice()
+        }
+    }
+
+    /// Prices are always pounds. A foreign one stays out of the field until
+    /// it has been converted, so nothing but pounds is ever shown as pounds.
+    private func convertPrice() {
+        priceNote = draft.priceNote
+        guard let price = draft.price, !price.isGBP else { return }
+        priceNote = ""
+        priceTask = Task {
+            let converted = await CurrencyConverter.toGBP(price)
+            guard !Task.isCancelled else { return }
+            if let converted {
+                draft.originalPrice = price
+                draft.price = converted
+                if priceText.isEmpty { priceText = PriceFormatter.editingText(pence: converted.pence) }
+            }
+            priceNote = draft.priceNote
         }
     }
 
@@ -237,17 +309,19 @@ final class AddWatchModel {
     private func commit() async {
         guard let boxID = selectedBoxID else { return }
         stage = .saving
-        let photos = await photoTask?.value ?? self.photos
+        // What's on screen is what gets saved, so stop looking for more.
+        photoTask?.cancel()
+        enrichTask?.cancel()
+        await priceTask?.value
         let chosen = photos.first { $0.id == visiblePhotoID } ?? photos.first
+        let cover = await CoverImages.encoding(chosen?.data)
         let edited = editedDraft()
         let id = boxID
         do {
             guard let box = try context.fetch(FetchDescriptor<Box>(predicate: #Predicate { $0.id == id })).first else {
                 throw CocoaError(.coderValueNotFound)
             }
-            let watch = try WatchRecorder.save(edited, photos: chosen.map { [$0.data] } ?? [], coverIndex: 0, to: box, in: context)
-            watch.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-            try context.save()
+            try WatchRecorder.save(edited, notes: notes.trimmingCharacters(in: .whitespacesAndNewlines), cover: cover, to: box, in: context)
             AppGroup.defaults.set(id.uuidString, forKey: SharedKeys.lastBoxID)
             if isExtension { ExternalChanges.markChanged() }
             draft = edited
@@ -270,7 +344,10 @@ final class AddWatchModel {
 
     /// Stops any work in progress and leaves the sheet as it is.
     func stop() {
+        startTask?.cancel()
         photoTask?.cancel()
+        enrichTask?.cancel()
+        priceTask?.cancel()
     }
 
     private func finish(_ message: String?) {

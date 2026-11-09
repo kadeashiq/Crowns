@@ -77,8 +77,10 @@ struct BoxEditorSheet: View {
             context.insert(target)
         }
         target.name = trimmed
-        target.columns = columns
-        target.compactSlots()
+        if target.columns != columns {
+            target.columns = columns
+            target.compactSlots()
+        }
         try? context.save()
         onDone(target)
     }

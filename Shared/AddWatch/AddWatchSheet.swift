@@ -298,10 +298,11 @@ struct AddWatchForm: View {
     /// Brands or models that fit what's been typed, under the field in use.
     @ViewBuilder
     private func typingSuggestions(for field: Field) -> some View {
-        if focus == field, !typingMatches.isEmpty {
+        let matches = focus == field ? typingMatches : []
+        if !matches.isEmpty {
             ScrollView(.horizontal) {
                 HStack(spacing: Space.xs) {
-                    ForEach(typingMatches) { match in
+                    ForEach(matches) { match in
                         ChipButton(title: match.model.isEmpty || model.brand.isEmpty ? match.title : match.model, flat: true) {
                             model.apply(match)
                             if focus == .brand { focus = .model }

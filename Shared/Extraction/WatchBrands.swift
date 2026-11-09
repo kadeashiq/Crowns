@@ -124,8 +124,10 @@ enum WatchBrands {
     static func canonical(_ raw: String) -> String? {
         let key = fold(raw)
         guard !key.isEmpty else { return nil }
-        return spellings.first { fold($0.spelling) == key }?.name
+        return namesBySpelling[key]
     }
+
+    private static let namesBySpelling = Dictionary(spellings.map { (fold($0.spelling), $0.name) }, uniquingKeysWith: { first, _ in first })
 
     /// A known brand appearing as whole words in `text`, and where it is.
     static func find(in text: String) -> (name: String, range: Range<String.Index>)? {
@@ -149,8 +151,6 @@ enum WatchBrands {
         }
         return nil
     }
-
-    static func isKnown(_ raw: String) -> Bool { canonical(raw) != nil }
 
     /// Removes the brand (any spelling) from the start or middle of a title.
     static func strip(_ brand: String, from text: String) -> String {

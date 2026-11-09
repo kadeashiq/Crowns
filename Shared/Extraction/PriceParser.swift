@@ -20,8 +20,6 @@ enum PriceParser {
         ("$", "USD"),
     ]
 
-    static let knownCodes: Set<String> = Set(markers.map(\.code))
-
     /// Parses a price with its currency. `fallbackCurrency` applies when the
     /// text has a bare number (e.g. JSON-LD "price": "3150.0").
     static func parse(_ text: String, fallbackCurrency: String? = nil) -> Money? {
@@ -42,10 +40,6 @@ enum PriceParser {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         if t.count == 3, t.allSatisfy(\.isLetter) { return t }
         return currencyCode(in: t) ?? t
-    }
-
-    static func number(in text: String) -> Double? {
-        decimal(in: text).map { NSDecimalNumber(decimal: $0).doubleValue }
     }
 
     /// The first number in the text, with thousands and decimal separators

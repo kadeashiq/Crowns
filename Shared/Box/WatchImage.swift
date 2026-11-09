@@ -17,19 +17,22 @@ struct WatchImage: View {
 
     let watch: Watch
     var size: Size = .card
+    /// The pixels the frame needs along its longer side, when that is fewer
+    /// than the size's own. A small card then decodes a small image.
+    var pixels: Int?
 
     var body: some View {
         Theme.well
             .overlay {
                 DecodedImage(
                     key: size == .thumbnail ? watch.thumbnailKey : watch.coverKey,
-                    data: size == .thumbnail ? watch.thumbnailData : watch.coverData,
-                    maxPixel: size.maxPixel,
+                    bytes: size == .thumbnail ? .data(watch.thumbnailData) : .cover(of: watch),
+                    maxPixel: min(pixels ?? size.maxPixel, size.maxPixel),
                     contentMode: .fill
                 )
             }
             .overlay {
-                if watch.coverData == nil {
+                if !watch.hasCover {
                     Image(systemName: "watch.analog")
                         .font(.title)
                         .foregroundStyle(Theme.inkTertiary)

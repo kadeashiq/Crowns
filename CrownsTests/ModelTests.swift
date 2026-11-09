@@ -169,14 +169,14 @@ struct ModelTests {
         draft.brand = "Omega"
         draft.price = Money(amount: 3312, currency: "GBP")
         draft.originalPrice = Money(amount: 4250, currency: "USD")
-        let watch = try WatchRecorder.save(draft, photos: [], coverIndex: 0, to: box, in: context)
+        let watch = try WatchRecorder.save(draft, to: box, in: context)
         #expect(watch.pricePence == 331_200)
         #expect(watch.priceNote == "$4,250 converted")
         #expect(watch.originalCurrency == "USD")
         #expect(watch.priceLabel == "£3,312")
     }
 
-    @Test func savingImportsOnlyTheChosenPhoto() async throws {
+    @Test func savingMakesTheCoverFromTheChosenPhotoAlone() async throws {
         let context = try memoryContext()
         var closed = false
         let model = AddWatchModel(context: context, isExtension: false) { _ in closed = true }
@@ -194,8 +194,44 @@ struct ModelTests {
         await model.save()
 
         let saved = try #require(try context.fetch(FetchDescriptor<Watch>()).first)
-        #expect(saved.sortedPhotos.map(\.data) == [photos[1].data])
+        let expected = await CoverImages.encoding(photos[1].data)
+        #expect(saved.coverData == expected.cover)
+        #expect(saved.thumbnailData == expected.thumbnail)
+        #expect(saved.hasCover)
+        #expect(saved.sortedPhotos.isEmpty)
         #expect(closed)
+    }
+
+    @Test func compactingWritesOnlyTheSlotsThatChange() throws {
+        let context = try memoryContext()
+        let box = Box(name: "Test", columns: 2, rows: 2)
+        context.insert(box)
+        let first = Watch()
+        let second = Watch()
+        first.box = box
+        second.box = box
+        first.slot = 0
+        second.slot = 3
+        try context.save()
+
+        box.compactSlots()
+
+        #expect(first.slot == 0)
+        #expect(second.slot == 1)
+        #expect(context.changedModelsArray.count == 1)
+    }
+
+    @Test func photosCanBeSavedOnceTheFirstHasArrived() throws {
+        let context = try memoryContext()
+        let model = AddWatchModel(context: context, isExtension: false) { _ in }
+        model.stage = .ready
+        #expect(!model.canSave)
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600)).jpegData(withCompressionQuality: 0.9) { ctx in
+            UIColor.red.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
+        }
+        model.photos = [try #require(ImageFetcher.photo(from: image))]
+        #expect(model.canSave)
     }
 
     @Test func savingKeepsWhatWasTyped() async throws {

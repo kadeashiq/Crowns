@@ -29,7 +29,7 @@ final class ShareViewController: UIViewController {
         let items = extensionContext?.inputItems.compactMap { $0 as? NSExtensionItem } ?? []
         Task { @MainActor in
             let input = await ShareInputReader.read(items)
-            await model.start(.share(input))
+            model.start(.share(input))
         }
     }
 

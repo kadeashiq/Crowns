@@ -8,14 +8,16 @@ enum BoxSeeder {
     static let collectionKey = "collection"
     static let wishlistKey = "wishlist"
 
-    static func ensureDefaults(in context: ModelContext) {
+    /// - Parameter merging: the share extension leaves duplicates to the app,
+    ///   the only place that sees what CloudKit brings in.
+    static func ensureDefaults(in context: ModelContext, merging: Bool = true) {
         let count = (try? context.fetchCount(FetchDescriptor<Box>())) ?? 0
         if count == 0 {
             context.insert(Box(name: "Wishlist", columns: 2, rows: 3, finish: .ebony, sortIndex: 0, seedKey: wishlistKey))
             context.insert(Box(name: "Collection", columns: 2, rows: 3, finish: .walnut, sortIndex: 1, seedKey: collectionKey))
             try? context.save()
         }
-        mergeDuplicateSeeds(in: context)
+        if merging { mergeDuplicateSeeds(in: context) }
     }
 
     static func mergeDuplicateSeeds(in context: ModelContext) {

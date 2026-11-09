@@ -94,12 +94,18 @@ enum WatchCatalog {
 
     static var brandsWithModels: [String] { families.map(\.brand) }
 
+    /// Each list folded once, not again on every keystroke.
+    private static let foldedBrands: [(item: String, key: String)] = brands.map { ($0, fold($0)) }
+    private static let foldedModels: [(item: Match, key: String)] = families.flatMap { family in
+        family.models.map { (Match(brand: family.brand, model: $0), fold($0)) }
+    }
+
     /// Brands to offer for what's been typed. Popular ones first.
     static func brands(matching query: String, limit: Int = 12) -> [Match] {
         let key = fold(query)
         guard !key.isEmpty else { return brands.prefix(limit).map { Match(brand: $0) } }
-        guard !brands.contains(where: { fold($0) == key }) else { return [] }
-        return ranked(brands, by: { $0 }, key: key).prefix(limit).map { Match(brand: $0) }
+        guard !foldedBrands.contains(where: { $0.key == key }) else { return [] }
+        return ranked(foldedBrands, key: key).prefix(limit).map { Match(brand: $0) }
     }
 
     /// Models to offer for what's been typed. Searches every brand until
@@ -107,31 +113,31 @@ enum WatchCatalog {
     static func models(matching query: String, brand: String, limit: Int = 12) -> [Match] {
         let key = fold(query)
         let chosen = fold(brand)
-        let pool: [Match]
+        let pool: [(item: Match, key: String)]
         if chosen.isEmpty {
             guard key.count >= 2 else { return [] }
-            pool = families.flatMap { family in family.models.map { Match(brand: family.brand, model: $0) } }
+            pool = foldedModels
         } else {
             let name = WatchBrands.canonical(brand) ?? brand
-            pool = (families.first { fold($0.brand) == fold(name) }?.models ?? []).map { Match(brand: name, model: $0) }
+            let target = fold(name)
+            pool = (families.first { fold($0.brand) == target }?.models ?? []).map { (Match(brand: name, model: $0), fold($0)) }
         }
-        guard !key.isEmpty else { return Array(pool.prefix(limit)) }
-        guard !pool.contains(where: { fold($0.model) == key }) else { return [] }
-        return Array(ranked(pool, by: \.model, key: key).prefix(limit))
+        guard !key.isEmpty else { return pool.prefix(limit).map(\.item) }
+        guard !pool.contains(where: { $0.key == key }) else { return [] }
+        return Array(ranked(pool, key: key).prefix(limit))
     }
 
     /// Names starting with what's typed come first, then names with a later word that does.
-    private static func ranked<T>(_ items: [T], by name: (T) -> String, key: String) -> [T] {
-        let starts = items.filter { fold(name($0)).hasPrefix(key) }
-        let words = items.filter { item in
-            let folded = fold(name(item))
-            return !folded.hasPrefix(key) && folded.contains(" " + key)
-        }
-        return starts + words
+    private static func ranked<T>(_ items: [(item: T, key: String)], key: String) -> [T] {
+        let starts = items.filter { $0.key.hasPrefix(key) }
+        let words = items.filter { !$0.key.hasPrefix(key) && $0.key.contains(" " + key) }
+        return (starts + words).map(\.item)
     }
 
+    private static let foldingLocale = Locale(identifier: "en_US_POSIX")
+
     private static func fold(_ text: String) -> String {
-        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: foldingLocale)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

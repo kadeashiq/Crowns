@@ -63,14 +63,6 @@ enum JSONValue: Codable, Hashable {
         }
     }
 
-    var double: Double? {
-        switch self {
-        case .number(let n): return n
-        case .string(let s): return PriceParser.number(in: s)
-        default: return nil
-        }
-    }
-
     /// The value as a list: arrays as they are, a single value wrapped.
     var list: [JSONValue] {
         switch self {

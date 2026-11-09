@@ -354,8 +354,10 @@ def ref(t):
 
 def scheme(build, launch, tests=()):
     entries = "".join(
-        f'         <BuildActionEntry\n            buildForTesting = "YES"\n            buildForRunning = "YES"\n            buildForProfiling = "YES"\n            buildForArchiving = "YES"\n            buildForAnalyzing = "YES">\n{ref(t)}         </BuildActionEntry>\n'
+        f'         <BuildActionEntry\n            buildForTesting = "YES"\n            buildForRunning = "{built}"\n            buildForProfiling = "{built}"\n            buildForArchiving = "{built}"\n            buildForAnalyzing = "YES">\n{ref(t)}         </BuildActionEntry>\n'
         for t in build
+        # Tests are only built to be run as tests.
+        for built in ["NO" if t in tests else "YES"]
     )
     testables = "".join(f'         <TestableReference\n            skipped = "NO">\n{ref(t)}         </TestableReference>\n' for t in tests)
     return f'''<?xml version="1.0" encoding="UTF-8"?>

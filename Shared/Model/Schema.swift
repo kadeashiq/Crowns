@@ -136,7 +136,7 @@ extension CrownsSchemaV1.Box {
     func compactSlots() {
         let ordered = sortedWatches
         while capacity < ordered.count { rows += 1 }
-        for (index, watch) in ordered.enumerated() { watch.slot = index }
+        for (index, watch) in ordered.enumerated() where watch.slot != index { watch.slot = index }
     }
 
     /// Seats these watches in slots 0, 1, 2… in the order given, adding rows

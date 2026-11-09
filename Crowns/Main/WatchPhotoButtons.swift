@@ -36,9 +36,19 @@ struct WatchPhotoButtons: View {
                 Label(hasPhoto ? "Retake" : "Take photo", systemImage: "camera")
             }
             .fullScreenCover(isPresented: $isTakingPhoto) {
-                CameraPicker { data in
+                CameraPicker { image in
                     isTakingPhoto = false
-                    if let data { onPhoto(data) }
+                    guard let image else { return }
+                    Task {
+                        let data = await Task.detached(priority: .userInitiated) {
+                            image.jpegData(compressionQuality: 0.9)
+                        }.value
+                        if let data {
+                            onPhoto(data)
+                        } else {
+                            onFailure()
+                        }
+                    }
                 }
                 .ignoresSafeArea()
             }
@@ -66,7 +76,7 @@ struct WatchPhotoButtons: View {
 
 /// The system camera. Reports the photo, or nil if it was cancelled.
 private struct CameraPicker: UIViewControllerRepresentable {
-    let onFinish: (Data?) -> Void
+    let onFinish: (UIImage?) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }
 
@@ -80,15 +90,14 @@ private struct CameraPicker: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIImagePickerController, context: Context) {}
 
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let onFinish: (Data?) -> Void
+        let onFinish: (UIImage?) -> Void
 
-        init(onFinish: @escaping (Data?) -> Void) {
+        init(onFinish: @escaping (UIImage?) -> Void) {
             self.onFinish = onFinish
         }
 
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            let image = info[.originalImage] as? UIImage
-            onFinish(image?.jpegData(compressionQuality: 0.9))
+            onFinish(info[.originalImage] as? UIImage)
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {

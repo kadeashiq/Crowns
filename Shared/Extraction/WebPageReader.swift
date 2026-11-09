@@ -12,6 +12,11 @@ final class WebPageReader: NSObject, WKNavigationDelegate {
     private static let log = Logger(subsystem: "Crowns", category: "reader")
     private var webView: WKWebView?
     private var loadWaiter: CheckedContinuation<Void, Never>?
+    private var waitTimer: Task<Void, Never>?
+    private var isCommitted = false
+    private var isLoaded = false
+
+    private static let probeInterval: TimeInterval = 0.4
 
     /// - Parameter host: a view to attach the web view to. WebKit throttles
     ///   pages that aren't in a window, so pass the visible sheet's view.
@@ -37,7 +42,29 @@ final class WebPageReader: NSObject, WKNavigationDelegate {
 
         let started = Date()
         web.load(URLRequest(url: url, timeoutInterval: timeout))
-        await waitForLoad(timeout: timeout)
+        return await withTaskCancellationHandler {
+            await read(web, started: started, timeout: timeout)
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.finishLoading() }
+        }
+    }
+
+    private func read(_ web: WKWebView, started: Date, timeout: TimeInterval) async -> (snapshot: PageSnapshot, json: String)? {
+        // Most of a load is images and trackers the form doesn't need. A page
+        // that has given a whole listing, the same one twice running, is done.
+        var previous: ListingDraft?
+        while !isLoaded, Date().timeIntervalSince(started) < timeout {
+            await waitForLoad(limit: Self.probeInterval)
+            guard !isLoaded, isCommitted, await isInteractive(web),
+                  let result = await evaluate(in: web), isWholeListing(result.snapshot) else {
+                previous = nil
+                continue
+            }
+            let draft = ListingInterpreter.interpret(result.snapshot)
+            if draft == previous { return result }
+            previous = draft
+        }
+        guard !Task.isCancelled else { return nil }
 
         // Give client-rendered pages a moment, then retry once if the first
         // read found nothing product-like.
@@ -49,6 +76,17 @@ final class WebPageReader: NSObject, WKNavigationDelegate {
             result = await evaluate(in: web) ?? result
         }
         return result
+    }
+
+    private func isWholeListing(_ snapshot: PageSnapshot) -> Bool {
+        guard snapshot.hasStructuredData, !(snapshot.specs ?? []).isEmpty, !(snapshot.images ?? []).isEmpty else { return false }
+        let draft = ListingInterpreter.interpret(snapshot)
+        return !draft.brand.isEmpty && !draft.model.isEmpty && draft.price != nil && !draft.imageURLs.isEmpty
+    }
+
+    private func isInteractive(_ web: WKWebView) async -> Bool {
+        let state = try? await web.callAsyncJavaScript("return document.readyState;", arguments: [:], in: nil, contentWorld: .defaultClient)
+        return (state as? String).map { $0 != "loading" } ?? false
     }
 
     private func evaluate(in web: WKWebView) async -> (snapshot: PageSnapshot, json: String)? {
@@ -63,19 +101,32 @@ final class WebPageReader: NSObject, WKNavigationDelegate {
         }
     }
 
-    private func waitForLoad(timeout: TimeInterval) async {
+    /// Waits for the page to finish loading, for `limit` seconds at most.
+    private func waitForLoad(limit: TimeInterval) async {
+        guard !isLoaded else { return }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             loadWaiter = continuation
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(timeout))
-                self?.finishLoading()
+            waitTimer = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(limit))
+                guard !Task.isCancelled else { return }
+                self?.resumeWaiter()
             }
         }
+        waitTimer?.cancel()
+    }
+
+    private func resumeWaiter() {
+        loadWaiter?.resume()
+        loadWaiter = nil
     }
 
     private func finishLoading() {
-        loadWaiter?.resume()
-        loadWaiter = nil
+        isLoaded = true
+        resumeWaiter()
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        isCommitted = true
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

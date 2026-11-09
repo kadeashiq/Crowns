@@ -4,17 +4,37 @@ import SwiftData
 /// One box, shown as a grid or as a list.
 struct BoxPage: View {
     let box: Box
+    /// Every box, for the Move menu.
+    let boxes: [Box]
     let mode: ViewMode
     let onOpen: (Watch) -> Void
     let onMove: (Watch, Box) -> Void
     let onRemove: (Watch) -> Void
 
     @Environment(\.modelContext) private var context
-    @Query(sort: \Watch.addedAt) private var allWatches: [Watch]
-    @Query(sort: [SortDescriptor(\Box.sortIndex), SortDescriptor(\Box.createdAt)]) private var boxes: [Box]
+    /// This box's watches only, so a change in another box leaves this page alone.
+    @Query private var boxWatches: [Watch]
+
+    init(
+        box: Box,
+        boxes: [Box],
+        mode: ViewMode,
+        onOpen: @escaping (Watch) -> Void,
+        onMove: @escaping (Watch, Box) -> Void,
+        onRemove: @escaping (Watch) -> Void
+    ) {
+        self.box = box
+        self.boxes = boxes
+        self.mode = mode
+        self.onOpen = onOpen
+        self.onMove = onMove
+        self.onRemove = onRemove
+        let boxID = box.id
+        _boxWatches = Query(filter: #Predicate<Watch> { $0.box?.id == boxID }, sort: \Watch.addedAt)
+    }
 
     private var watches: [Watch] {
-        allWatches.filter { $0.box?.id == box.id }.sorted { ($0.slot, $0.addedAt) < ($1.slot, $1.addedAt) }
+        boxWatches.sorted { ($0.slot, $0.addedAt) < ($1.slot, $1.addedAt) }
     }
 
     var body: some View {
@@ -52,9 +72,17 @@ struct BoxCanvas: View {
     let onReorder: ([Watch]) -> Void
 
     @Environment(\.contentWidth) private var contentWidth
+    @Environment(\.displayScale) private var displayScale
     @State private var width: CGFloat = 0
 
     private var metrics: GridMetrics { GridMetrics(columns: box.columns) }
+
+    /// Before the page is measured, photos are sized for a phone.
+    private var imagePixels: Int {
+        let measured = width == 0 ? 402 : min(width, contentWidth)
+        let columns = GridMetrics.columns(forWidth: measured, preferred: box.columns)
+        return metrics.imagePixels(forWidth: measured, columns: columns, scale: displayScale)
+    }
 
     var body: some View {
         ScrollView(.vertical) {
@@ -64,7 +92,7 @@ struct BoxCanvas: View {
                 watches: watches,
                 onReorder: onReorder
             ) { watch in
-                WatchCell(watch: watch, metrics: metrics) {
+                WatchCell(watch: watch, metrics: metrics, imagePixels: imagePixels) {
                     onOpen(watch)
                 }
             }

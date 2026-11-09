@@ -5,12 +5,11 @@ import UIKit
 /// Downloads candidate product photos and keeps the ones that look like
 /// photos of the product: big enough, not banner- or strip-shaped.
 enum ImageFetcher {
-    struct Photo: Identifiable, Hashable {
+    struct Photo: Identifiable, Hashable, Sendable {
         let id = UUID()
-        /// Downscaled JPEG, ≤ `storedPixel` on the long side. This is what gets stored.
+        /// What the cover is made from: the image as it came when that's
+        /// light enough to hold, otherwise a JPEG ≤ `storedPixel` on the long side.
         let data: Data
-        let pixelSize: CGSize
-        let sourceURL: URL?
         /// Already decoded, small enough to keep several in memory, so the
         /// sheet never decodes on the main thread or pops an image in.
         let preview: UIImage
@@ -23,6 +22,8 @@ enum ImageFetcher {
 
     static let storedPixel = 1600
     static let minimumPixel: CGFloat = 300
+    /// Heavier images are re-encoded rather than held as they came.
+    static let heldBytes = 1_500_000
 
     private static let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
@@ -33,20 +34,31 @@ enum ImageFetcher {
         return URLSession(configuration: config)
     }()
 
-    /// Fetches up to `limit` usable photos, in the order given.
-    static func photos(from urls: [URL], referer: URL?, limit: Int = 8) async -> [Photo] {
+    /// Fetches up to `limit` usable photos and hands each one over once every
+    /// photo ahead of it has been dealt with, so they arrive in the order given.
+    static func photos(from urls: [URL], referer: URL?, limit: Int = 8, deliver: @escaping @MainActor @Sendable (Photo) -> Void) async {
         let candidates = Array(urls.prefix(limit + 4))
-        let results = await withTaskGroup(of: (Int, Photo?).self) { group in
+        await withTaskGroup(of: (Int, Photo?).self) { group in
             for (index, url) in candidates.enumerated() {
                 group.addTask { (index, await photo(from: url, referer: referer)) }
             }
-            var collected: [(Int, Photo)] = []
+            var finished: [Int: Photo?] = [:]
+            var next = 0
+            var delivered = 0
             for await (index, photo) in group {
-                if let photo { collected.append((index, photo)) }
+                finished[index] = .some(photo)
+                while let result = finished.removeValue(forKey: next) {
+                    next += 1
+                    guard let result else { continue }
+                    await deliver(result)
+                    delivered += 1
+                    if delivered == limit {
+                        group.cancelAll()
+                        return
+                    }
+                }
             }
-            return collected
         }
-        return results.sorted { $0.0 < $1.0 }.map(\.1).prefix(limit).map { $0 }
     }
 
     static func photo(from url: URL, referer: URL?) async -> Photo? {
@@ -57,25 +69,23 @@ enum ImageFetcher {
         guard let fetched = try? await session.data(for: request) else { return nil }
         let (data, response) = fetched
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return nil }
-        return photo(from: data, sourceURL: url)
+        return photo(from: data)
     }
 
-    /// Validates and downscales image bytes from any source.
-    static func photo(from data: Data, sourceURL: URL? = nil) -> Photo? {
+    /// `photo(from:)`, off the main thread.
+    static func preparedPhoto(from data: Data) async -> Photo? {
+        await Task.detached(priority: .userInitiated) { photo(from: data) }.value
+    }
+
+    /// Validates image bytes from any source and prepares them for the sheet.
+    static func photo(from data: Data) -> Photo? {
         guard let size = ImageDownscaler.pixelSize(of: data),
               min(size.width, size.height) >= minimumPixel else { return nil }
         let aspect = size.width / max(size.height, 1)
         guard aspect > 0.4, aspect < 2.5 else { return nil }
-        let longSide = max(size.width, size.height)
-        let target = min(Int(longSide), storedPixel)
-        guard let jpeg = ImageDownscaler.jpeg(from: data, maxPixel: target),
-              let preview = ImageDownscaler.thumbnail(from: jpeg, maxPixel: min(target, previewPixel)) else { return nil }
-        let scale = CGFloat(target) / longSide
-        return Photo(
-            data: jpeg,
-            pixelSize: CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded()),
-            sourceURL: sourceURL,
-            preview: UIImage(cgImage: preview)
-        )
+        let longSide = Int(max(size.width, size.height))
+        let held = data.count <= heldBytes ? data : ImageDownscaler.jpeg(from: data, maxPixel: min(longSide, storedPixel))
+        guard let held, let preview = ImageDownscaler.thumbnail(from: held, maxPixel: min(longSide, previewPixel)) else { return nil }
+        return Photo(data: held, preview: UIImage(cgImage: preview))
     }
 }

@@ -13,6 +13,8 @@ enum CurrencyConverter {
 
     private static let cacheKey = "fxRatesGBP"
     private static let maxAge: TimeInterval = 20 * 3600
+    /// Older rates are only used when no newer ones can be had.
+    private static let usableAge: TimeInterval = 7 * 24 * 3600
     private static let endpoints = [
         "https://api.frankfurter.dev/v1/latest?base=GBP",
         "https://api.frankfurter.app/latest?from=GBP",
@@ -28,12 +30,20 @@ enum CurrencyConverter {
 
     static func rates() async -> Rates? {
         let cached = load()
-        if let cached, Date().timeIntervalSince(cached.fetchedAt) < maxAge { return cached }
-        if let fresh = await fetch() {
-            save(fresh)
-            return fresh
+        let age = cached.map { Date().timeIntervalSince($0.fetchedAt) } ?? .infinity
+        if age < maxAge { return cached }
+        if age < usableAge {
+            // Close enough for now. The next listing gets today's.
+            Task.detached(priority: .utility) { _ = await refresh() }
+            return cached
         }
-        return cached
+        return await refresh() ?? cached
+    }
+
+    private static func refresh() async -> Rates? {
+        guard let fresh = await fetch() else { return nil }
+        save(fresh)
+        return fresh
     }
 
     private struct Response: Decodable {

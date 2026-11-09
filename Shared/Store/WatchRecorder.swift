@@ -1,38 +1,40 @@
 import Foundation
 import SwiftData
 
-/// Turns a draft and its photos into a saved Watch.
-@MainActor
-enum WatchRecorder {
+/// A photo's cover and thumbnail, encoded ahead of saving so the slow part
+/// stays off the main thread.
+struct CoverImages: Sendable {
     static let coverPixel = 1400
     static let thumbnailPixel = 240
 
+    var cover: Data?
+    var thumbnail: Data?
+
+    static func encoding(_ photo: Data?) async -> CoverImages {
+        guard let photo else { return CoverImages() }
+        return await Task.detached(priority: .userInitiated) {
+            CoverImages(
+                cover: ImageDownscaler.jpeg(from: photo, maxPixel: coverPixel, quality: 0.85),
+                thumbnail: ImageDownscaler.jpeg(from: photo, maxPixel: thumbnailPixel, quality: 0.75)
+            )
+        }.value
+    }
+}
+
+/// Turns a draft and its photo into a saved Watch.
+@MainActor
+enum WatchRecorder {
     @discardableResult
-    static func save(_ draft: ListingDraft, photos: [Data], coverIndex: Int, to box: Box, slot preferred: Int? = nil, in context: ModelContext) throws -> Watch {
+    static func save(_ draft: ListingDraft, notes: String = "", cover: CoverImages = CoverImages(), to box: Box, in context: ModelContext) throws -> Watch {
         let watch = Watch()
         apply(draft, to: watch)
-
-        // The chosen cover leads the photo order.
-        var ordered = photos
-        if photos.indices.contains(coverIndex) {
-            ordered.insert(ordered.remove(at: coverIndex), at: 0)
-        }
-        setCover(of: watch, photo: ordered.first)
+        watch.notes = notes
+        setCover(of: watch, to: cover)
 
         context.insert(watch)
-        let slot: Int
-        if let preferred, box.isFree(preferred) {
-            slot = preferred
-        } else {
-            slot = box.claimFreeSlot()
-        }
+        let slot = box.claimFreeSlot()
         watch.box = box
         watch.slot = slot
-        for (index, data) in ordered.enumerated() {
-            let stored = WatchPhoto(data: data, index: index)
-            context.insert(stored)
-            stored.watch = watch
-        }
         try context.save()
         return watch
     }
@@ -51,15 +53,10 @@ enum WatchRecorder {
         watch.specs = draft.specs
     }
 
-    /// Sets the cover and thumbnail from the chosen photo.
-    static func setCover(of watch: Watch, photo: Data?) {
+    /// Sets the cover and thumbnail.
+    static func setCover(of watch: Watch, to images: CoverImages) {
         watch.coverIsCutout = false
-        guard let photo else {
-            watch.coverData = nil
-            watch.thumbnailData = nil
-            return
-        }
-        watch.coverData = ImageDownscaler.jpeg(from: photo, maxPixel: coverPixel, quality: 0.85)
-        watch.thumbnailData = ImageDownscaler.jpeg(from: photo, maxPixel: thumbnailPixel, quality: 0.75)
+        watch.coverData = images.cover
+        watch.thumbnailData = images.thumbnail
     }
 }

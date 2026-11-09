@@ -54,7 +54,7 @@ struct EditWatchSheet: View {
                 if photos.count > 1 {
                     coverPicker(photos)
                 }
-                if photos.isEmpty {
+                if photos.isEmpty, !watch.hasCover {
                     photoSection
                 }
 
@@ -119,12 +119,17 @@ struct EditWatchSheet: View {
     }
 
     private func usePhoto(_ data: Data) {
-        guard let photo = ImageFetcher.photo(from: data) else {
-            photoError = "Couldn't read that photo"
-            return
+        working = true
+        Task {
+            let photo = await ImageFetcher.preparedPhoto(from: data)
+            working = false
+            guard let photo else {
+                photoError = "Couldn't read that photo"
+                return
+            }
+            photoError = ""
+            newPhoto = photo
         }
-        photoError = ""
-        newPhoto = photo
     }
 
     private func coverPicker(_ photos: [WatchPhoto]) -> some View {
@@ -137,7 +142,7 @@ struct EditWatchSheet: View {
                             Haptics.tick()
                             coverPhotoID = photo.id
                         } label: {
-                            DecodedImage(key: photo.id.uuidString, data: photo.data, maxPixel: 360, contentMode: .fill)
+                            DecodedImage(key: photo.id.uuidString, bytes: .photo(photo), maxPixel: 360, contentMode: .fill)
                                 .frame(width: 72, height: 72)
                                 .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
                                 .padding(3)
@@ -217,13 +222,10 @@ struct EditWatchSheet: View {
             reordered.removeAll { $0.id == coverPhotoID }
             reordered.insert(chosen, at: 0)
             for (index, photo) in reordered.enumerated() { photo.index = index }
-            WatchRecorder.setCover(of: watch, photo: data)
+            WatchRecorder.setCover(of: watch, to: await CoverImages.encoding(data))
         }
         if let newPhoto {
-            let stored = WatchPhoto(data: newPhoto.data, index: 0)
-            context.insert(stored)
-            stored.watch = watch
-            WatchRecorder.setCover(of: watch, photo: newPhoto.data)
+            WatchRecorder.setCover(of: watch, to: await CoverImages.encoding(newPhoto.data))
         }
         try? context.save()
         working = false

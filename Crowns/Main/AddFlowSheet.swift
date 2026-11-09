@@ -129,7 +129,7 @@ struct AddFlowSheet: View {
     private func begin(_ source: AddWatchSource) {
         let model = AddWatchModel(context: context, isExtension: false, boxID: boxID, finish: onDone)
         self.model = model
-        Task { await model.start(source) }
+        model.start(source)
     }
 }
 

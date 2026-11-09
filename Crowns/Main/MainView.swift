@@ -46,6 +46,7 @@ struct MainView: View {
                 ForEach(boxes) { box in
                     BoxPage(
                         box: box,
+                        boxes: boxes,
                         mode: mode,
                         onOpen: open,
                         onMove: move,
@@ -53,6 +54,7 @@ struct MainView: View {
                     )
                     .safeAreaPadding(.top, topBarHeight)
                     .safeAreaPadding(.bottom, bottomBarHeight)
+                    .environment(\.keepsImages, isInReach(box))
                     .tag(Optional(box.id))
                 }
             }
@@ -202,14 +204,21 @@ struct MainView: View {
         withAnimation { selectedBoxID = box.id }
     }
 
+    /// The box on show and the one either side of it, a swipe away.
+    private func isInReach(_ box: Box) -> Bool {
+        guard let shown = boxes.firstIndex(where: { $0.id == selectedBox?.id }),
+              let index = boxes.firstIndex(where: { $0.id == box.id }) else { return true }
+        return abs(index - shown) <= 1
+    }
+
     // MARK: - Detail
 
     private func open(_ watch: Watch) {
         Task {
             // Decode the large image first, so the sheet never shows an empty frame.
-            if let data = watch.coverData {
+            if watch.hasCover {
                 let size = WatchImage.Size.full.maxPixel
-                _ = await ImageCache.shared.image(for: DecodedImage.cacheKey(watch.coverKey, size), data: data, maxPixel: size)
+                _ = await ImageCache.shared.image(for: DecodedImage.cacheKey(watch.coverKey, size), bytes: .cover(of: watch), maxPixel: size)
             }
             Haptics.lift()
             focused = watch

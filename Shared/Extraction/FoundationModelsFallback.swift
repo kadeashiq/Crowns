@@ -7,6 +7,14 @@ import FoundationModels
 /// reads the page text and fills in what the heuristics missed. It only ever
 /// fills empty fields; anything found earlier wins.
 enum FoundationModelsFallback {
+    /// Loads the model ahead of the first question.
+    static func prewarm() {
+        #if canImport(FoundationModels)
+        guard SystemLanguageModel.default.isAvailable else { return }
+        LanguageModelSession(instructions: listingInstructions).prewarm()
+        #endif
+    }
+
     static func fill(_ draft: inout ListingDraft, title: String, text: String) async {
         #if canImport(FoundationModels)
         guard let guess = await guess(title: title, text: text) else { return }
@@ -44,7 +52,7 @@ enum FoundationModelsFallback {
 
 #if canImport(FoundationModels)
 @Generable
-struct WatchListingGuess {
+struct WatchListingGuess: Sendable {
     @Guide(description: "The watch manufacturer, for example Rolex, Omega or Seiko. Empty if the page doesn't say.")
     var brand: String
     @Guide(description: "The model name without the brand or reference number, for example Submariner Date or Speedmaster Professional. Empty if unclear.")
@@ -78,7 +86,7 @@ struct WatchSpecsGuess: Sendable {
 }
 
 @Generable
-struct WatchSpecGuess {
+struct WatchSpecGuess: Sendable {
     @Guide(description: "A short label, for example Case size")
     var label: String
     @Guide(description: "A short value, for example 41 mm")
@@ -86,34 +94,39 @@ struct WatchSpecGuess {
 }
 
 extension FoundationModelsFallback {
+    fileprivate static let listingInstructions = """
+        You read web pages that sell watches: shops, auctions and brand sites. \
+        Identify the one watch being sold and extract its details. \
+        Use only facts stated in the page. Leave a field empty rather than guess.
+        """
+
     static func guess(title: String, text: String) async -> WatchListingGuess? {
         guard SystemLanguageModel.default.isAvailable else { return nil }
-        let session = LanguageModelSession(instructions: """
-            You read web pages that sell watches: shops, auctions and brand sites. \
-            Identify the one watch being sold and extract its details. \
-            Use only facts stated in the page. Leave a field empty rather than guess.
-            """)
         let prompt = "Page title: \(title)\n\nPage text:\n\(text.prefix(6000))"
-        do {
-            return try await session.respond(to: prompt, generating: WatchListingGuess.self).content
-        } catch {
-            return nil
+        return await answer(within: 15) {
+            let session = LanguageModelSession(instructions: listingInstructions)
+            return try? await session.respond(to: prompt, generating: WatchListingGuess.self).content
         }
     }
 
-    /// Gives up after a few seconds, so a slow model never holds up saving.
     static func specsGuess(text: String) async -> WatchSpecsGuess? {
         guard SystemLanguageModel.default.isAvailable else { return nil }
-        return await withTaskGroup(of: WatchSpecsGuess?.self) { group in
+        let prompt = "Page text:\n\(text.prefix(6000))"
+        return await answer(within: 8) {
+            let session = LanguageModelSession(instructions: """
+                You read web pages that sell watches. Find the listed details of the one watch being sold. \
+                Copy values exactly as written. Leave a field empty rather than guess.
+                """)
+            return try? await session.respond(to: prompt, generating: WatchSpecsGuess.self).content
+        }
+    }
+
+    /// Gives up after a few seconds, so a slow model doesn't run on for long.
+    private static func answer<Guess: Sendable>(within seconds: Int, _ ask: @escaping @Sendable () async -> Guess?) async -> Guess? {
+        await withTaskGroup(of: Guess?.self) { group in
+            group.addTask(operation: ask)
             group.addTask {
-                let session = LanguageModelSession(instructions: """
-                    You read web pages that sell watches. Find the listed details of the one watch being sold. \
-                    Copy values exactly as written. Leave a field empty rather than guess.
-                    """)
-                return try? await session.respond(to: "Page text:\n\(text.prefix(6000))", generating: WatchSpecsGuess.self).content
-            }
-            group.addTask {
-                try? await Task.sleep(for: .seconds(8))
+                try? await Task.sleep(for: .seconds(seconds))
                 return nil
             }
             let first = await group.next() ?? nil
