@@ -13,6 +13,33 @@ enum FoundationModelsFallback {
         apply(guess, to: &draft)
         #endif
     }
+
+    /// Fills specs the page reading missed. Free and on-device, on iPhones
+    /// with Apple Intelligence; other devices simply skip this step.
+    static func fillSpecs(_ draft: inout ListingDraft, text: String) async {
+        #if canImport(FoundationModels)
+        guard let guess = await specsGuess(text: text) else { return }
+        let added = guess.fields.compactMap { label, value -> Spec? in
+            let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !draft.specs.contains(where: { $0.label == label }), isGrounded(value, in: text) else { return nil }
+            return Spec(label: label, value: value)
+        }
+        guard !added.isEmpty else { return }
+        draft.specs = SpecNormalizer.ordered(draft.specs + added)
+        draft.sources.insert(.foundationModels)
+        #endif
+    }
+
+    /// True only if what the model said really is on the page, so it can't
+    /// invent a number or a material.
+    static func isGrounded(_ value: String, in text: String) -> Bool {
+        guard !value.isEmpty, value.count <= 80 else { return false }
+        let source = text.lowercased()
+        let words = value.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "." })
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ".")) }
+        let checked = words.filter { $0.contains(where: \.isNumber) || $0.count >= 4 }
+        return !checked.isEmpty && checked.allSatisfy { source.contains($0) }
+    }
 }
 
 #if canImport(FoundationModels)
@@ -30,6 +57,24 @@ struct WatchListingGuess {
     var currency: String
     @Guide(description: "Up to eight short specifications stated on the page, such as case size, movement, case material, dial, year or condition.")
     var specs: [WatchSpecGuess]
+}
+
+@Generable
+struct WatchSpecsGuess: Sendable {
+    @Guide(description: "The case diameter, for example 41 mm. Empty if the text doesn't state it.")
+    var caseSize: String
+    @Guide(description: "The case thickness or height, for example 9.5 mm. Empty if the text doesn't state it.")
+    var thickness: String
+    @Guide(description: "The movement type or name, for example Automatic. Empty if the text doesn't state it.")
+    var movement: String
+    @Guide(description: "The case material, for example Stainless steel. Empty if the text doesn't state it.")
+    var caseMaterial: String
+    @Guide(description: "The water resistance, for example 100 m. Empty if the text doesn't state it.")
+    var waterResistance: String
+
+    var fields: [(String, String)] {
+        [("Case size", caseSize), ("Thickness", thickness), ("Movement", movement), ("Case", caseMaterial), ("Water resistance", waterResistance)]
+    }
 }
 
 @Generable
@@ -53,6 +98,27 @@ extension FoundationModelsFallback {
             return try await session.respond(to: prompt, generating: WatchListingGuess.self).content
         } catch {
             return nil
+        }
+    }
+
+    /// Gives up after a few seconds, so a slow model never holds up saving.
+    static func specsGuess(text: String) async -> WatchSpecsGuess? {
+        guard SystemLanguageModel.default.isAvailable else { return nil }
+        return await withTaskGroup(of: WatchSpecsGuess?.self) { group in
+            group.addTask {
+                let session = LanguageModelSession(instructions: """
+                    You read web pages that sell watches. Find the listed details of the one watch being sold. \
+                    Copy values exactly as written. Leave a field empty rather than guess.
+                    """)
+                return try? await session.respond(to: "Page text:\n\(text.prefix(6000))", generating: WatchSpecsGuess.self).content
+            }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(8))
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
         }
     }
 

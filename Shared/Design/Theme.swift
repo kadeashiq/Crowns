@@ -17,8 +17,9 @@ enum Theme {
     static let onInk = adaptive(light: 0xFFFFFF, dark: 0x0A0A0A)
     static let hairline = adaptive(light: 0xE4E4E6, dark: 0x2F2F32)
 
-    /// For UIKit hosts, which draw before SwiftUI does.
+    /// For UIKit, which can't take SwiftUI colours.
     static let uiCanvas = dynamic(light: 0xF2F2F3, dark: 0x000000)
+    static let uiInk = dynamic(light: 0x0A0A0A, dark: 0xFAFAFA)
 
     private static func adaptive(light: UInt32, dark: UInt32) -> Color {
         Color(uiColor: dynamic(light: light, dark: dark))

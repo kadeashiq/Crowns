@@ -11,11 +11,16 @@ struct MainView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @Environment(SyncMonitor.self) private var sync
+    @Environment(StoreHost.self) private var store
 
     @Query(sort: [SortDescriptor(\Box.sortIndex), SortDescriptor(\Box.createdAt)]) private var boxes: [Box]
 
     @AppStorage("viewMode") private var mode: ViewMode = .box
     @AppStorage("selectedBoxID") private var selectedBoxRaw = ""
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
+    @State private var selectedBoxID: UUID?
+    @State private var topBarHeight: CGFloat = 0
+    @State private var bottomBarHeight: CGFloat = 0
     @State private var focused: Watch?
     @State private var watchToRemove: Watch?
     @State private var afterDetailCloses: (() -> Void)?
@@ -27,15 +32,15 @@ struct MainView: View {
     @State private var seenStamp = ExternalChanges.stamp
 
     private var selectedBox: Box? {
-        boxes.first { $0.id.uuidString == selectedBoxRaw } ?? boxes.first
+        boxes.first { $0.id == selectedBoxID } ?? boxes.first
     }
 
     var body: some View {
         ZStack {
             Theme.canvas.ignoresSafeArea()
 
-            ZStack {
-                if let box = selectedBox {
+            TabView(selection: $selectedBoxID) {
+                ForEach(boxes) { box in
                     BoxPage(
                         box: box,
                         mode: mode,
@@ -43,13 +48,19 @@ struct MainView: View {
                         onMove: move,
                         onRemove: { watchToRemove = $0 }
                     )
-                    // New identity per external save, to re-run queries.
-                    .id("\(box.id.uuidString)|\(refreshID.uuidString)")
+                    .safeAreaPadding(.top, topBarHeight)
+                    .safeAreaPadding(.bottom, bottomBarHeight)
+                    .tag(Optional(box.id))
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .simultaneousGesture(boxSwipe)
-            .fadingBar(.top) {
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            // New identity per external save, to re-run queries.
+            .id(refreshID)
+            .sensoryFeedback(.selection, trigger: selectedBoxID) { old, new in old != nil && new != nil }
+            .scrollEdgeEffectHidden(true, for: .all)
+            // Pages run beneath the bars, so the fades have something to fade.
+            .ignoresSafeArea(.container, edges: .vertical)
+            .fadingOverlay(.top, height: $topBarHeight) {
                 VStack(spacing: 0) {
                     header
                     BoxChips(
@@ -62,7 +73,7 @@ struct MainView: View {
                     )
                 }
             }
-            .fadingBar(.bottom) { addButton }
+            .fadingOverlay(.bottom, subtle: true, height: $bottomBarHeight) { addButton }
         }
         .confirmationDialog(
             "Are you sure you want to remove this watch?",
@@ -80,8 +91,6 @@ struct MainView: View {
             AddFlowSheet(boxID: request.boxID) { _ in
                 adding = nil
             }
-            .presentationDetents([.large])
-            .crownsSheet()
         }
         .sheet(item: $editingBox) { request in
             BoxEditorSheet(box: request.box) { saved in
@@ -95,9 +104,22 @@ struct MainView: View {
                 .presentationDetents([.medium, .large])
                 .crownsSheet()
         }
-        .sheet(isPresented: $showSettings) {
+        .sheet(isPresented: $showSettings, onDismiss: { store.applySyncSetting() }) {
             SettingsView()
                 .crownsSheet()
+        }
+        .fullScreenCover(isPresented: Binding(get: { !hasSeenOnboarding }, set: { _ in })) {
+            OnboardingView(pages: OnboardingPage.tour + OnboardingPage.safari, finishTitle: "Get started", canSkip: true) {
+                hasSeenOnboarding = true
+            }
+        }
+        .onAppear { selectedBoxID = UUID(uuidString: selectedBoxRaw) ?? boxes.first?.id }
+        .onChange(of: selectedBoxID) { _, id in
+            if let id { selectedBoxRaw = id.uuidString }
+        }
+        .onChange(of: boxes.map(\.id)) { _, ids in
+            if let selectedBoxID, ids.contains(selectedBoxID) { return }
+            selectedBoxID = ids.first
         }
         .task {
             BoxSeeder.ensureDefaults(in: context)
@@ -158,21 +180,7 @@ struct MainView: View {
     // MARK: - Boxes
 
     private func select(_ box: Box) {
-        guard box.id != selectedBox?.id else { return }
-        Haptics.tick()
-        selectedBoxRaw = box.id.uuidString
-    }
-
-    private var boxSwipe: some Gesture {
-        DragGesture(minimumDistance: 24)
-            .onEnded { value in
-                let dx = value.translation.width
-                guard abs(dx) > 60, abs(dx) > abs(value.translation.height) * 1.6,
-                      let current = boxes.firstIndex(where: { $0.id == selectedBox?.id }) else { return }
-                let next = dx < 0 ? current + 1 : current - 1
-                guard boxes.indices.contains(next) else { return }
-                select(boxes[next])
-            }
+        withAnimation { selectedBoxID = box.id }
     }
 
     // MARK: - Detail

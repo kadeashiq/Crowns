@@ -8,8 +8,8 @@ enum AddWatchSource {
     case share(ShareInput)
     /// A link pasted in the app.
     case link(URL)
-    /// A photo picked in the app.
-    case photo(Data)
+    /// Typed in by hand in the app.
+    case manual
 }
 
 struct ShareInput {
@@ -17,6 +17,35 @@ struct ShareInput {
     var snapshotJSON: String?
     /// The page URL. From Safari alongside the snapshot; from other apps alone.
     var url: URL?
+}
+
+/// One spec in the form. Parsed and standard specs keep their label;
+/// `isCustom` ones have a label the user types.
+struct EditableSpec: Identifiable {
+    let id = UUID()
+    var label: String
+    var value: String
+    var isCustom = false
+
+    /// What was parsed, plus the standard fields it didn't fill, in the usual order.
+    static func merging(_ parsed: [Spec]) -> [EditableSpec] {
+        let blanks = SpecNormalizer.formFields
+            .filter { field in !parsed.contains { $0.label == field } }
+            .map { Spec(label: $0, value: "") }
+        return SpecNormalizer.ordered(parsed + blanks).map { EditableSpec(label: $0.label, value: $0.value) }
+    }
+
+    /// The specs worth keeping: filled in, and one per label.
+    static func saved(_ specs: [EditableSpec]) -> [Spec] {
+        var seen = Set<String>()
+        let filled = specs.compactMap { spec -> Spec? in
+            let label = spec.label.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = spec.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !label.isEmpty, !value.isEmpty, seen.insert(label.lowercased()).inserted else { return nil }
+            return Spec(label: label, value: value)
+        }
+        return SpecNormalizer.ordered(filled)
+    }
 }
 
 /// Drives the add-watch sheet, in the share extension and in the app.
@@ -35,6 +64,7 @@ final class AddWatchModel {
     var model = ""
     var reference = ""
     var notes = ""
+    var specs = EditableSpec.merging([])
     /// Pounds, as typed.
     var priceText = ""
     /// "$1,650 converted", or the original price when no rate was available.
@@ -46,13 +76,19 @@ final class AddWatchModel {
     var boxes: [BoxChoice] = []
     var selectedBoxID: UUID?
     var errorText = ""
+    /// Being added by hand rather than read from a page.
+    var isManual = false
+    /// The camera is up. The sheet behind it mustn't count as closed.
+    var isTakingPhoto = false
+    /// What the photo might show, offered as a tap to fill in.
+    var suggestions: [WatchCatalog.Match] = []
+    var isIdentifying = false
 
     let isExtension: Bool
 
     @ObservationIgnored private var draft = ListingDraft()
-    @ObservationIgnored private var outcome: ExtractionPipeline.Outcome?
     @ObservationIgnored private var photoTask: Task<[ImageFetcher.Photo], Never>?
-    @ObservationIgnored private var recorded = false
+    @ObservationIgnored private var identifyTask: Task<Void, Never>?
     @ObservationIgnored private var finished = false
     @ObservationIgnored var hostView: UIView?
     private let context: ModelContext
@@ -69,18 +105,22 @@ final class AddWatchModel {
         loadBoxes(preferred: boxID)
     }
 
-    var canSave: Bool { stage == .ready && !photosLoading }
+    var canSave: Bool { stage == .ready && !photosLoading && (!isManual || hasDetails) }
+
+    private var hasDetails: Bool {
+        !photos.isEmpty || !brand.trimmingCharacters(in: .whitespaces).isEmpty || !model.trimmingCharacters(in: .whitespaces).isEmpty
+    }
 
     /// What's being pulled from the page right now, or nil once it's done.
     var loadingMessage: String? {
-        if stage == .reading { return "Reading the listing…" }
-        if photosLoading { return "Getting the photos…" }
+        if stage == .reading { return "Reading listing…" }
+        if photosLoading { return "Getting photos…" }
         return nil
     }
 
     /// The page gave us nothing to work with.
     var foundNothing: Bool {
-        loadingMessage == nil && photos.isEmpty && brand.isEmpty && model.isEmpty
+        !isManual && loadingMessage == nil && photos.isEmpty && brand.isEmpty && model.isEmpty
     }
 
     private func loadBoxes(preferred: UUID?) {
@@ -107,27 +147,58 @@ final class AddWatchModel {
             await read(snapshotJSON: input.snapshotJSON, url: input.url)
         case .link(let url):
             await read(snapshotJSON: nil, url: url)
-        case .photo(let data):
+        case .manual:
+            isManual = true
             stage = .ready
-            if let photo = ImageFetcher.photo(from: data) {
-                photos = [photo]
-                visiblePhotoID = photo.id
-            } else {
-                errorText = "Couldn't read that photo"
-            }
             photosLoading = false
         }
     }
 
+    /// Uses this photo for a watch added by hand and looks for what it shows.
+    func setPhoto(_ data: Data) {
+        guard let photo = ImageFetcher.photo(from: data) else {
+            errorText = "Couldn't read that photo"
+            return
+        }
+        errorText = ""
+        photos = [photo]
+        visiblePhotoID = photo.id
+        suggestions = []
+        isIdentifying = true
+        identifyTask?.cancel()
+        identifyTask = Task {
+            let found = await WatchPhotoIdentifier.suggestions(for: photo.data)
+            guard !Task.isCancelled else { return }
+            suggestions = found
+            isIdentifying = false
+        }
+    }
+
+    /// Specs the form doesn't already show, to offer under Add spec.
+    var unusedSpecLabels: [String] {
+        SpecNormalizer.labels.filter { label in !specs.contains { $0.label == label } }
+    }
+
+    func addSpec(_ label: String?) {
+        specs.append(EditableSpec(label: label ?? "", value: "", isCustom: label == nil))
+    }
+
+    /// Fills in a suggestion. A brand on its own leaves any model typed so far.
+    func apply(_ match: WatchCatalog.Match) {
+        Haptics.tick()
+        brand = match.brand
+        if !match.model.isEmpty { model = match.model }
+    }
+
     private func read(snapshotJSON: String?, url: URL?) async {
         let outcome = await ExtractionPipeline.run(snapshotJSON: snapshotJSON, url: url, host: hostView)
-        self.outcome = outcome
         draft = outcome.draft
         brand = draft.brand
         model = draft.model
         reference = draft.reference
         priceText = PriceFormatter.editingText(pence: draft.price?.pence)
         priceNote = draft.priceNote
+        specs = EditableSpec.merging(draft.specs)
         stage = .ready
 
         let urls = draft.imageURLs
@@ -161,6 +232,7 @@ final class AddWatchModel {
         edited.brand = brand
         edited.model = model
         edited.reference = reference
+        edited.specs = EditableSpec.saved(specs)
         let typed = priceText.trimmingCharacters(in: .whitespaces)
         if let pence = PriceFormatter.pence(fromEditing: typed) {
             if pence != draft.price?.pence {
@@ -192,7 +264,6 @@ final class AddWatchModel {
             AppGroup.defaults.set(id.uuidString, forKey: SharedKeys.lastBoxID)
             if isExtension { ExternalChanges.markChanged() }
             draft = edited
-            record(saved: true)
             Haptics.saved()
             stage = .saved
             try? await Task.sleep(for: .milliseconds(650))
@@ -205,28 +276,20 @@ final class AddWatchModel {
 
     /// The sheet was swiped away. Does nothing once a save has started.
     func cancel() {
-        guard stage != .saving, stage != .saved else { return }
-        photoTask?.cancel()
-        record(saved: false)
+        guard stage != .saving, stage != .saved, !isTakingPhoto else { return }
+        stop()
         finish(nil)
+    }
+
+    /// Stops any work in progress and leaves the sheet as it is.
+    func stop() {
+        photoTask?.cancel()
+        identifyTask?.cancel()
     }
 
     private func finish(_ message: String?) {
         guard !finished else { return }
         finished = true
         onFinish(message)
-    }
-
-    private func record(saved: Bool) {
-        guard !recorded, outcome != nil else { return }
-        recorded = true
-        DiagnosticsLog.record(DiagnosticEntry(
-            url: draft.sourceURL?.absoluteString,
-            steps: outcome?.steps ?? [],
-            draft: draft,
-            photoCount: photos.count,
-            saved: saved,
-            snapshotJSON: outcome?.snapshotJSON
-        ))
     }
 }

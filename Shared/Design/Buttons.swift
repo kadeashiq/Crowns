@@ -7,6 +7,8 @@ struct PillButtonStyle: ButtonStyle {
 
     var kind: Kind = .primary
     var size: Size = .large
+    /// A light outline, for a white button on a light sheet.
+    var bordered = false
 
     @Environment(\.isEnabled) private var isEnabled
 
@@ -20,6 +22,9 @@ struct PillButtonStyle: ButtonStyle {
             .background {
                 if kind != .quiet {
                     Capsule().fill(fill).elevation(pressed || !isEnabled ? .flat : rest)
+                }
+                if bordered {
+                    Capsule().strokeBorder(Color.gray.opacity(0.3), lineWidth: 1)
                 }
             }
             .contentShape(.capsule)
@@ -104,8 +109,8 @@ struct PressableStyle: ButtonStyle {
 }
 
 extension ButtonStyle where Self == PillButtonStyle {
-    static func pill(_ kind: PillButtonStyle.Kind = .primary, size: PillButtonStyle.Size = .large) -> PillButtonStyle {
-        PillButtonStyle(kind: kind, size: size)
+    static func pill(_ kind: PillButtonStyle.Kind = .primary, size: PillButtonStyle.Size = .large, bordered: Bool = false) -> PillButtonStyle {
+        PillButtonStyle(kind: kind, size: size, bordered: bordered)
     }
 }
 

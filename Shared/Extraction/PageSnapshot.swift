@@ -15,6 +15,8 @@ struct PageSnapshot: Codable, Hashable {
     var shopify: JSONValue?
     var microdata: [String: String]?
     var specs: [[String]]?
+    /// Short lines stating a measurement, including text in closed dropdowns.
+    var specLines: [String]?
     var priceTexts: [String]?
     var images: [Image]?
     var text: String?

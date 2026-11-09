@@ -58,7 +58,7 @@ struct BoxCanvas<MenuContent: View>: View {
             .padding(.bottom, Space.md)
 
             if watches.isEmpty {
-                Text("No watches in this box yet")
+                Text("Nothing here yet. Tap + to add a watch.")
                     .font(Typeface.secondary)
                     .foregroundStyle(Theme.inkSecondary)
             }
@@ -86,7 +86,7 @@ struct WatchListView<MenuContent: View>: View {
                     .contextMenu { menu(watch) }
                 }
                 if watches.isEmpty {
-                    Text("No watches in this box yet")
+                    Text("Nothing here yet. Tap + to add a watch.")
                         .font(Typeface.secondary)
                         .foregroundStyle(Theme.inkSecondary)
                         .padding(.top, Space.xxl)

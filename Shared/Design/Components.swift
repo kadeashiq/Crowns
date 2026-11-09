@@ -56,14 +56,30 @@ struct RowDivider: View {
     }
 }
 
+/// A small rounded black tile holding a row's symbol.
+private struct RowIcon: View {
+    let symbol: String
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(Theme.onInk)
+            .frame(width: 30, height: 30)
+            .background(Theme.ink, in: .rect(cornerRadius: 9, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
 /// A title on the left and a quiet value on the right.
 struct ValueRow<Value: View>: View {
     let title: String
+    var icon: String? = nil
     var showsChevron = false
     @ViewBuilder var value: () -> Value
 
     var body: some View {
-        HStack(spacing: Space.xs) {
+        HStack(spacing: Space.sm) {
+            if let icon { RowIcon(symbol: icon) }
             Text(title)
                 .font(Typeface.body)
                 .foregroundStyle(Theme.ink)
@@ -78,14 +94,14 @@ struct ValueRow<Value: View>: View {
             }
         }
         .padding(.horizontal, Space.md)
-        .frame(minHeight: 50)
+        .frame(minHeight: 54)
         .contentShape(.rect)
     }
 }
 
 extension ValueRow where Value == EmptyView {
-    init(title: String, showsChevron: Bool = false) {
-        self.init(title: title, showsChevron: showsChevron) { EmptyView() }
+    init(title: String, icon: String? = nil, showsChevron: Bool = false) {
+        self.init(title: title, icon: icon, showsChevron: showsChevron) { EmptyView() }
     }
 }
 
@@ -144,12 +160,13 @@ extension SheetHeader where Trailing == EmptyView {
 /// The page colour, fading to clear away from a screen edge.
 private struct EdgeFade: View {
     let edge: VerticalEdge
+    let subtle: Bool
 
     var body: some View {
         LinearGradient(
             stops: [
-                .init(color: Theme.canvas, location: 0),
-                .init(color: Theme.canvas.opacity(0.9), location: 0.6),
+                .init(color: Theme.canvas.opacity(subtle ? 0.45 : 1), location: 0),
+                .init(color: Theme.canvas.opacity(subtle ? 0.18 : 0.9), location: 0.6),
                 .init(color: Theme.canvas.opacity(0), location: 1),
             ],
             startPoint: edge == .top ? .top : .bottom,
@@ -161,56 +178,67 @@ private struct EdgeFade: View {
 }
 
 extension View {
+    /// A `fadingBar` for content that manages its own scrolling, such as
+    /// paged views, which clip to any safe area they're given. Reports its
+    /// height so the content can leave room.
+    func fadingOverlay<Bar: View>(_ edge: VerticalEdge, subtle: Bool = false, height: Binding<CGFloat>, @ViewBuilder bar: () -> Bar) -> some View {
+        overlay(alignment: edge == .top ? .top : .bottom) {
+            bar()
+                .frame(maxWidth: .infinity)
+                .padding(edge == .top ? .bottom : .top, Space.md)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height.wrappedValue = $0 }
+                .background { EdgeFade(edge: edge, subtle: subtle) }
+        }
+    }
+
     /// Pins buttons to a screen edge, with content scrolling softly beneath
-    /// them. Use this rather than a solid bar.
-    func fadingBar<Bar: View>(_ edge: VerticalEdge, @ViewBuilder bar: () -> Bar) -> some View {
+    /// them. Use this rather than a solid bar. `subtle` barely tints what's
+    /// behind, for controls that float over photos.
+    func fadingBar<Bar: View>(_ edge: VerticalEdge, subtle: Bool = false, @ViewBuilder bar: () -> Bar) -> some View {
         scrollEdgeEffectHidden(true, for: edge == .top ? .top : .bottom)
             .safeAreaInset(edge: edge, spacing: 0) {
                 bar()
                     .frame(maxWidth: .infinity)
                     .padding(edge == .top ? .bottom : .top, Space.md)
-                    .background { EdgeFade(edge: edge) }
+                    .background { EdgeFade(edge: edge, subtle: subtle) }
             }
     }
 }
 
-/// A grey bar standing in for text that's still loading.
-struct SkeletonBar: View {
-    var width: CGFloat = 120
-
-    var body: some View {
-        Capsule()
-            .fill(Theme.hairline)
-            .frame(width: width, height: 14)
-    }
-}
-
-/// A capsule label. Pass the same namespace to a row of chips and the black
-/// selection slides from one to the next.
-struct Chip: View {
+/// A capsule on the page. The selected one is black.
+struct ChipButton: View {
     let title: String
-    let selected: Bool
-    let namespace: Namespace.ID
+    var selected = false
+    /// No shadow, for chips inside a form row, which would clip it.
+    var flat = false
+    let action: () -> Void
 
     var body: some View {
-        Text(title)
-            .font(Typeface.label)
-            .lineLimit(1)
-            .foregroundStyle(selected ? Theme.onInk : Theme.inkSecondary)
-            .padding(.horizontal, Space.md)
-            .frame(height: 40)
-            .background {
-                ZStack {
-                    Capsule().fill(Theme.surface).elevation(.low)
-                    if selected {
-                        Capsule()
-                            .fill(Theme.ink)
-                            .elevation(.mid)
-                            .matchedGeometryEffect(id: "chip.selection", in: namespace)
+        Button(action: action) {
+            Text(title)
+                .font(Typeface.label)
+                .lineLimit(1)
+                .foregroundStyle(selected ? Theme.onInk : Theme.inkSecondary)
+                .padding(.horizontal, Space.md)
+                .frame(height: 40)
+                .background {
+                    ZStack {
+                        if flat {
+                            Capsule().fill(Theme.well)
+                        } else {
+                            Capsule().fill(Theme.surface).elevation(.low)
+                        }
+                        if selected {
+                            Capsule().fill(Theme.ink).elevation(.mid)
+                        }
                     }
                 }
-            }
-            .contentShape(.capsule)
+                // A 44pt touch target around the 40pt capsule.
+                .padding(.vertical, 2)
+                .contentShape(.rect)
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

@@ -30,9 +30,9 @@ enum ListingInterpreter {
         d.reference = reference(table: table, product: product, micro: micro, name: name, allTitles: allTitles, text: s.text)
         d.model = model(table: table, product: product, name: name, h1: s.h1, brand: d.brand, reference: d.reference)
         d.price = price(product: product, shopify: shopify, micro: micro, meta: meta, priceTexts: s.priceTexts ?? [], s: s)
-        d.specs = SpecNormalizer.specs(from: table, title: name)
-        d.imageURLs = images(product: product, shopify: shopify, s: s)
         d.summary = String((first(product?["description"]?.string, shopify?["description"]?.string, meta["og:description"], meta["description"]) ?? "").prefix(600))
+        d.specs = SpecNormalizer.specs(from: table, title: name, text: ((s.specLines ?? []) + [d.summary]).joined(separator: "\n"))
+        d.imageURLs = images(product: product, shopify: shopify, s: s)
 
         if product != nil { d.sources.insert(.jsonLD) }
         if shopify != nil { d.sources.insert(.shopify) }

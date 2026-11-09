@@ -1,86 +1,129 @@
 import SwiftUI
 import SwiftData
-import PhotosUI
 
-/// Adding inside the app: paste a link (same reader as the share extension)
-/// or pick a photo, then the same compact sheet.
+/// Adding inside the app: a link (same reader as the share extension) or
+/// typing it in by hand. The form opens as its own sheet on top of this one.
 struct AddFlowSheet: View {
     let boxID: UUID?
     let onDone: (String?) -> Void
 
     @Environment(\.modelContext) private var context
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var model: AddWatchModel?
-    @State private var photoItem: PhotosPickerItem?
-    @State private var note = ""
+    @State private var contentHeight: CGFloat = 238
+    @State private var sheetHeight: CGFloat = 238
+    @State private var detentHeight: CGFloat = 212
+    @State private var link = ""
+    @State private var isEnteringLink = false
 
     var body: some View {
-        if let model {
-            AddWatchSheet(model: model)
-                .onDisappear { model.cancel() }
-        } else {
-            chooser
+        chooser
+            .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.height(detentHeight)])
+            .presentationDragIndicator(.hidden)
+            .sheet(isPresented: isShowingForm) {
+                if let model {
+                    NavigationStack {
+                        AddWatchForm(model: model, photoActions: model.isManual ? AnyView(ManualPhotoRows(model: model)) : nil)
+                    }
+                    .tint(Theme.ink)
+                    .presentationDragIndicator(.visible)
+                }
+            }
+    }
+
+    /// Swiping the form away comes back here, ready to start again.
+    private var isShowingForm: Binding<Bool> {
+        Binding(
+            get: { model != nil },
+            set: { showing in
+                guard !showing else { return }
+                model?.stop()
+                model = nil
+            }
+        )
+    }
+
+    private var typedURL: URL? { ShareInputReader.firstLink(in: link) }
+
+    private var chooser: some View {
+        VStack(spacing: Space.md) {
+            VStack(spacing: Space.xs) {
+                Text("Add a watch")
+                    .font(Typeface.title)
+                    .foregroundStyle(Theme.ink)
+                Text("**Found one online?** Paste the link and we'll do the rest.\n**Already on your wrist?** Enter it yourself.")
+                    .font(Typeface.caption)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            VStack(spacing: 10) {
+                Button {
+                    link = ""
+                    isEnteringLink = true
+                } label: {
+                    Text("Extract from URL")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.pill())
+
+                Button {
+                    begin(.manual)
+                } label: {
+                    Text("Add manually")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.pill(.secondary, bordered: true))
+            }
+        }
+        .padding(Space.md)
+        // Its full height at any text size, for the sheet to grow to.
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Centred in the whole sheet, so the gap above matches the gap below.
+        .background(Color(.systemGroupedBackground))
+        .ignoresSafeArea(.container, edges: .vertical)
+        // A detent doesn't count the sheet's bottom inset, so size it from
+        // the sheet's real height until that matches the buttons.
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sheetHeight = $0 }
+        .onChange(of: contentHeight - sheetHeight) { _, difference in
+            if abs(difference) > 0.5 { detentHeight += difference }
+        }
+        .alert("Extract from URL", isPresented: $isEnteringLink) {
+            TextField("Paste or type a URL", text: $link)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button("Cancel", role: .cancel) {}
+            Button("Extract", action: openTypedLink)
+                .disabled(typedURL == nil)
         }
     }
 
-    private var chooser: some View {
-        VStack(spacing: 0) {
-            Spacer()
-            Text("Add a watch")
-                .font(Typeface.title)
-                .foregroundStyle(Theme.ink)
-            Text("Paste a link from any shop, or choose a photo.")
-                .font(Typeface.secondary)
-                .foregroundStyle(Theme.inkSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.top, Space.xxs)
-            Spacer()
-
-            VStack(spacing: Space.sm) {
-                PasteButton(supportedContentTypes: [.url, .plainText]) { providers in
-                    Task { @MainActor in
-                        if let url = await ShareInputReader.firstURL(from: providers) {
-                            begin(.link(url))
-                        } else {
-                            note = "No link to paste"
-                        }
-                    }
-                }
-                .buttonBorderShape(.capsule)
-                .controlSize(.large)
-                .tint(Theme.ink)
-
-                PhotosPicker(selection: $photoItem, matching: .images) {
-                    Label("Choose photo", systemImage: "photo")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.pill(.secondary))
-
-                if !note.isEmpty {
-                    Text(note)
-                        .font(Typeface.caption)
-                        .foregroundStyle(Theme.inkSecondary)
-                }
-            }
-            .padding(.horizontal, Space.lg)
-            .padding(.bottom, Space.lg)
-        }
-        .background(Theme.canvas)
-        .onChange(of: photoItem) { _, item in
-            guard let item else { return }
-            Task {
-                let loaded = try? await item.loadTransferable(type: Data.self)
-                if let data = loaded ?? nil {
-                    begin(.photo(data))
-                } else {
-                    note = "Couldn't read that photo"
-                }
-            }
-        }
+    private func openTypedLink() {
+        guard let url = typedURL else { return }
+        begin(.link(url))
     }
 
     private func begin(_ source: AddWatchSource) {
         let model = AddWatchModel(context: context, isExtension: false, boxID: boxID, finish: onDone)
         self.model = model
         Task { await model.start(source) }
+    }
+}
+
+/// The photo rows for a watch being added by hand.
+private struct ManualPhotoRows: View {
+    @Bindable var model: AddWatchModel
+
+    var body: some View {
+        WatchPhotoButtons(
+            hasPhoto: !model.photos.isEmpty,
+            isTakingPhoto: $model.isTakingPhoto,
+            rows: true,
+            onPhoto: model.setPhoto,
+            onFailure: { model.errorText = "Couldn't read that photo" }
+        )
     }
 }

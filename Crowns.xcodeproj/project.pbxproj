@@ -87,10 +87,6 @@
 			fileRef = 7E479A67046E30470DCB235E;
 			isa = PBXBuildFile;
 		};
-		1F4C0D44F69C2B13A1C36915 = {
-			fileRef = ECA7AE44D2A1D62709BC2C79;
-			isa = PBXBuildFile;
-		};
 		21876FB2893F4ED74D2227D5 = {
 			fileRef = B5786D8C96D55C02BE20F05E;
 			isa = PBXBuildFile;
@@ -175,16 +171,20 @@
 			fileRef = E26A69B5375FB48B68B71D98;
 			isa = PBXBuildFile;
 		};
+		484C9B14B6C1E988D219923F = {
+			fileRef = 931A4159E120287570BECFFA;
+			isa = PBXBuildFile;
+		};
 		4ACD514539CD1056847CDF97 = {
 			fileRef = D42D7D1074826F31F90427B5;
 			isa = PBXBuildFile;
 		};
-		4B5B37BBD03AB290A81FA089 = {
-			fileRef = AF03D18BC5BC7B4B6A4F6D7A;
-			isa = PBXBuildFile;
-		};
 		4B711AAFC62656E9CF6456B8 = {
 			fileRef = 2A43CD30D29EBB98A7F377F2;
+			isa = PBXBuildFile;
+		};
+		4CCA7872D17A2A324D6AE11A = {
+			fileRef = 65CC4C13B2B0272E26106FE6;
 			isa = PBXBuildFile;
 		};
 		4F04CE0BA5E752FE0457851E = {
@@ -199,8 +199,12 @@
 			fileRef = D2261BEB4A304DAD09795FD5;
 			isa = PBXBuildFile;
 		};
-		554AE3DDE135E9878C75A018 = {
-			fileRef = AF03D18BC5BC7B4B6A4F6D7A;
+		538CE22CD424E937444321D1 = {
+			fileRef = 6C5C2A3C33E8C1927AF39C47;
+			isa = PBXBuildFile;
+		};
+		5663059F0026C5BD33B5937C = {
+			fileRef = 65CC4C13B2B0272E26106FE6;
 			isa = PBXBuildFile;
 		};
 		566FB02A968F8AE34BF1D599 = {
@@ -275,6 +279,10 @@
 			fileRef = 8CD5413926F795D2D5A32A35;
 			isa = PBXBuildFile;
 		};
+		7443A2FBD31C4EB6E62FE5F2 = {
+			fileRef = 6C5C2A3C33E8C1927AF39C47;
+			isa = PBXBuildFile;
+		};
 		74FBF7874BA4D8B47922CB3B = {
 			fileRef = BA06A874454D72412C8EF20A;
 			isa = PBXBuildFile;
@@ -297,6 +305,14 @@
 		};
 		7E23628817F1E2B24DAF5941 = {
 			fileRef = 1FC112E80B868D417402FD2C;
+			isa = PBXBuildFile;
+		};
+		805D4939EFA7A73A73B02F3E = {
+			fileRef = 87F63FA40649DA4AD7782D67;
+			isa = PBXBuildFile;
+		};
+		827F5E447EFF8E19C81845F3 = {
+			fileRef = 953FBC10CCDB17FD631CA11E;
 			isa = PBXBuildFile;
 		};
 		829AD2EC5D11C1CBC2703E05 = {
@@ -339,6 +355,10 @@
 			fileRef = 4DAF630D1BB67552B52888AF;
 			isa = PBXBuildFile;
 		};
+		9128C4A11152B3260A687E9C = {
+			fileRef = 7667ED1C14B308C6DBE7F303;
+			isa = PBXBuildFile;
+		};
 		972345482DC208B08B2B7E6C = {
 			fileRef = BEDFB722927184D772D7611F;
 			isa = PBXBuildFile;
@@ -363,6 +383,10 @@
 			fileRef = 0126E11538670222C4592FBD;
 			isa = PBXBuildFile;
 		};
+		A1195F8D821E6954123AEB41 = {
+			fileRef = 14EE51BE3DBE4B40B68CEC0B;
+			isa = PBXBuildFile;
+		};
 		A224B2F7227CC3BCE2F9D9D7 = {
 			fileRef = 644C80FFE918D7DF6828FB65;
 			isa = PBXBuildFile;
@@ -377,6 +401,10 @@
 		};
 		ACAE475A3B84FFFB5342483B = {
 			fileRef = F268CE732990D3D55779A975;
+			isa = PBXBuildFile;
+		};
+		AD368B71DBBFCFB0968521C2 = {
+			fileRef = 65CC4C13B2B0272E26106FE6;
 			isa = PBXBuildFile;
 		};
 		B0E0413F22F186B8CD760A27 = {
@@ -403,6 +431,10 @@
 			fileRef = 29B0F75E87992ADE2BC1F0D5;
 			isa = PBXBuildFile;
 		};
+		BB651F102F305330A121E777 = {
+			fileRef = FA369495068DB2A34BE81389;
+			isa = PBXBuildFile;
+		};
 		BBF9E40FC8F5758164A260F5 = {
 			fileRef = 42BFDA57E4A3BFF477EF4E16;
 			isa = PBXBuildFile;
@@ -413,10 +445,6 @@
 		};
 		BDA91152B52C7C4542F319FD = {
 			fileRef = A839C92FBADB1674BF0F91C6;
-			isa = PBXBuildFile;
-		};
-		BF33113E1B9F103E8B0A63CE = {
-			fileRef = 4EF955AB20B4547F26B829C4;
 			isa = PBXBuildFile;
 		};
 		BFA165EE119C7769D7721D1B = {
@@ -496,14 +524,6 @@
 			fileRef = AA748D4989422A7D41B99876;
 			isa = PBXBuildFile;
 		};
-		D687F92C3F0956B49D977F7D = {
-			fileRef = E11B5E7577ACA58E7E279D91;
-			isa = PBXBuildFile;
-		};
-		D68A914A6C97D0440E8C4D13 = {
-			fileRef = AF03D18BC5BC7B4B6A4F6D7A;
-			isa = PBXBuildFile;
-		};
 		DA67565AAFEE79B0F3789732 = {
 			fileRef = 81716A7A622E556EB33DE88B;
 			isa = PBXBuildFile;
@@ -518,6 +538,10 @@
 		};
 		DBF1EDB3A92BB724A455665E = {
 			fileRef = 81716A7A622E556EB33DE88B;
+			isa = PBXBuildFile;
+		};
+		E15ABF3FF1D76DAB624814FC = {
+			fileRef = 3F5192179A2F39F309BB30B9;
 			isa = PBXBuildFile;
 		};
 		E181EB1436D12CB8AA5AC46B = {
@@ -562,6 +586,10 @@
 		};
 		F29E03A930D8541A8066C190 = {
 			fileRef = 28BF2F868498FAD0A42B48A9;
+			isa = PBXBuildFile;
+		};
+		F43C58CE771E61189EDDE35A = {
+			fileRef = 6C5C2A3C33E8C1927AF39C47;
 			isa = PBXBuildFile;
 		};
 		F96F968B3B68D6F13D3046FD = {
@@ -640,6 +668,12 @@
 			isa = PBXFileReference;
 			path = Crowns.app;
 			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		14EE51BE3DBE4B40B68CEC0B = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = StoreHost.swift;
+			sourceTree = "<group>";
 		};
 		193713A89511126806C256EE = {
 			isa = PBXFileReference;
@@ -726,6 +760,12 @@
 			path = BoxOrderSheet.swift;
 			sourceTree = "<group>";
 		};
+		3F5192179A2F39F309BB30B9 = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.iconcomposer.icon;
+			path = Green.icon;
+			sourceTree = "<group>";
+		};
 		3FA5589D0A77388C90EA79E1 = {
 			isa = PBXFileReference;
 			lastKnownFileType = text.plist.xml;
@@ -780,12 +820,6 @@
 			path = PrivacyInfo.xcprivacy;
 			sourceTree = "<group>";
 		};
-		4EF955AB20B4547F26B829C4 = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = DesignSystemView.swift;
-			sourceTree = "<group>";
-		};
 		602B1D0CB0031B490A682E1B = {
 			isa = PBXFileReference;
 			lastKnownFileType = text.json;
@@ -798,10 +832,28 @@
 			path = ViewAnchor.swift;
 			sourceTree = "<group>";
 		};
+		65CC4C13B2B0272E26106FE6 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = WatchPhotoIdentifier.swift;
+			sourceTree = "<group>";
+		};
+		6C5C2A3C33E8C1927AF39C47 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = WatchCatalog.swift;
+			sourceTree = "<group>";
+		};
 		6EC85FAB401FB8975C10F255 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = MainView.swift;
+			sourceTree = "<group>";
+		};
+		7667ED1C14B308C6DBE7F303 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = OnboardingView.swift;
 			sourceTree = "<group>";
 		};
 		77E8E4714FFDC46CC5897A89 = {
@@ -852,6 +904,12 @@
 			path = CrownsApp.swift;
 			sourceTree = "<group>";
 		};
+		87F63FA40649DA4AD7782D67 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = PasteLinkTests.swift;
+			sourceTree = "<group>";
+		};
 		8C44EAD7287F3F658FDEFE72 = {
 			isa = PBXFileReference;
 			lastKnownFileType = text.json;
@@ -864,10 +922,22 @@
 			path = WatchRecorder.swift;
 			sourceTree = "<group>";
 		};
+		931A4159E120287570BECFFA = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.iconcomposer.icon;
+			path = Crowns.icon;
+			sourceTree = "<group>";
+		};
 		94BBBC0224520EB5FEA156DD = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = ExtractorScript.swift;
+			sourceTree = "<group>";
+		};
+		953FBC10CCDB17FD631CA11E = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = WatchPhotoButtons.swift;
 			sourceTree = "<group>";
 		};
 		98ED38A097F3A9EF0B99BFF9 = {
@@ -910,12 +980,6 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = PriceParser.swift;
-			sourceTree = "<group>";
-		};
-		AF03D18BC5BC7B4B6A4F6D7A = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = DiagnosticsLog.swift;
 			sourceTree = "<group>";
 		};
 		B453D53106BCE8319F02EC82 = {
@@ -972,12 +1036,6 @@
 			path = Theme.swift;
 			sourceTree = "<group>";
 		};
-		E11B5E7577ACA58E7E279D91 = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = DiagnosticsView.swift;
-			sourceTree = "<group>";
-		};
 		E26A69B5375FB48B68B71D98 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -1002,12 +1060,6 @@
 			path = BoxSeeder.swift;
 			sourceTree = "<group>";
 		};
-		ECA7AE44D2A1D62709BC2C79 = {
-			isa = PBXFileReference;
-			lastKnownFileType = folder.iconcomposer.icon;
-			path = Crowns.icon;
-			sourceTree = "<group>";
-		};
 		ED41F75E1909858D5B05AE4B = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -1030,6 +1082,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = Spec.swift;
+			sourceTree = "<group>";
+		};
+		FA369495068DB2A34BE81389 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = AppIcons.swift;
 			sourceTree = "<group>";
 		};
 /* End PBXFileReference section */
@@ -1061,6 +1119,7 @@
 /* Begin PBXGroup section */
 		0CEEA3158E90B9263F4E0CFD = {
 			children = (
+				14EE51BE3DBE4B40B68CEC0B,
 				4057A46144339386358A5B6D,
 			);
 			isa = PBXGroup;
@@ -1099,8 +1158,7 @@
 		};
 		68129DCFA65C15D12D140365 = {
 			children = (
-				4EF955AB20B4547F26B829C4,
-				E11B5E7577ACA58E7E279D91,
+				FA369495068DB2A34BE81389,
 				F1AA468663CC2263674F205A,
 			);
 			isa = PBXGroup;
@@ -1113,6 +1171,8 @@
 				B453D53106BCE8319F02EC82,
 				BF74545DBACB1340A8B81EE9,
 				644C80FFE918D7DF6828FB65,
+				6C5C2A3C33E8C1927AF39C47,
+				65CC4C13B2B0272E26106FE6,
 			);
 			isa = PBXGroup;
 			path = AddWatch;
@@ -1146,9 +1206,18 @@
 				362F4096CA2794E142708DED,
 				9941327DED463A9E083D73AA,
 				0854FD0720962E7AADC020CD,
+				87F63FA40649DA4AD7782D67,
 			);
 			isa = PBXGroup;
 			path = CrownsTests;
+			sourceTree = "<group>";
+		};
+		7C17BF2213C8AC045C952500 = {
+			children = (
+				7667ED1C14B308C6DBE7F303,
+			);
+			isa = PBXGroup;
+			path = Onboarding;
 			sourceTree = "<group>";
 		};
 		8A2934BF8E67675297A3835F = {
@@ -1168,7 +1237,6 @@
 				743E24E6DF6C17FB657A3962,
 				FAA011204C3DA4FAB1FA9BB5,
 				A0476C73559A4A7DBC4E4BA6,
-				C0FC82F6072D5AF566FB95D0,
 				769B5BEF36E315960B949E5F,
 				CA3C51033CC8E80BA09AE8F9,
 				C910C8D60EA0CFB631435249,
@@ -1201,6 +1269,15 @@
 			path = Design;
 			sourceTree = "<group>";
 		};
+		A609734F5FB52A733908F77C = {
+			children = (
+				931A4159E120287570BECFFA,
+				3F5192179A2F39F309BB30B9,
+			);
+			isa = PBXGroup;
+			path = Icons;
+			sourceTree = "<group>";
+		};
 		B3730233FA434462B28D4EC8 = {
 			children = (
 				4DAF630D1BB67552B52888AF,
@@ -1208,14 +1285,6 @@
 			);
 			isa = PBXGroup;
 			path = CrownsShare;
-			sourceTree = "<group>";
-		};
-		C0FC82F6072D5AF566FB95D0 = {
-			children = (
-				AF03D18BC5BC7B4B6A4F6D7A,
-			);
-			isa = PBXGroup;
-			path = Diagnostics;
 			sourceTree = "<group>";
 		};
 		C910C8D60EA0CFB631435249 = {
@@ -1241,6 +1310,7 @@
 				35CB9DC04678E627BF645399,
 				A7F7B2E05D227372416557B1,
 				6EC85FAB401FB8975C10F255,
+				953FBC10CCDB17FD631CA11E,
 			);
 			isa = PBXGroup;
 			path = Main;
@@ -1272,11 +1342,12 @@
 			children = (
 				67C3A1C0CF909C1356EF41D8,
 				9EBFABC6A0AAB12942A0A7B5,
+				A609734F5FB52A733908F77C,
 				CA90C7D2C251C7F300FB1C0E,
+				7C17BF2213C8AC045C952500,
 				68129DCFA65C15D12D140365,
 				0CEEA3158E90B9263F4E0CFD,
 				492D9F7767EF6F81DC76E7B5,
-				ECA7AE44D2A1D62709BC2C79,
 				825F8BC342AD119BC6F3DAEC,
 				3202647EE6ACFB5282FD463B,
 			);
@@ -1426,7 +1497,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				FD2791C5541F174F4DBD7A9E,
-				1F4C0D44F69C2B13A1C36915,
+				484C9B14B6C1E988D219923F,
+				E15ABF3FF1D76DAB624814FC,
 				ECB7927101F73FB1B90D0EB6,
 				1AB71900F86B947C44376B55,
 			);
@@ -1448,14 +1520,18 @@
 				44BEEACE028486BB73729647,
 				F02B758BB635E74601B57210,
 				E94268EB7FF149D90EFA7590,
-				BF33113E1B9F103E8B0A63CE,
-				D687F92C3F0956B49D977F7D,
+				827F5E447EFF8E19C81845F3,
+				9128C4A11152B3260A687E9C,
+				BB651F102F305330A121E777,
 				85D24B64EF26C5DBF02D3A24,
+				A1195F8D821E6954123AEB41,
 				677C1F21C35DDC8BABAD68F7,
 				328E620F497915BCE3FF492A,
 				59AB1B0CD8164ACA62E18C4A,
 				077B8CF0093B21F47E25B04E,
 				CA518C513240220D345433B3,
+				538CE22CD424E937444321D1,
+				AD368B71DBBFCFB0968521C2,
 				577DB4DE2A6922143229429C,
 				12AD69CB20D5849CEF1A5643,
 				F1A73F14FBC609AED760FD98,
@@ -1464,7 +1540,6 @@
 				7B45D1B2C6F079463E24873F,
 				4B711AAFC62656E9CF6456B8,
 				EF932EBA515859DCDB3603AC,
-				4B5B37BBD03AB290A81FA089,
 				CFDCB0BEE0125A8F2E1FB739,
 				B0E0413F22F186B8CD760A27,
 				139E9354C86647FCD2198C87,
@@ -1502,6 +1577,8 @@
 				CBCA5E0D1C61A37EA2717E27,
 				CBBB3A7D60E7A3D7B72C8AB6,
 				A224B2F7227CC3BCE2F9D9D7,
+				7443A2FBD31C4EB6E62FE5F2,
+				5663059F0026C5BD33B5937C,
 				A37D441725909E4E365A30C7,
 				35489E1392C983A3F937A414,
 				19E8B522004AC60FFFC49A5E,
@@ -1510,7 +1587,6 @@
 				DB997F0C394C95942F18D0FE,
 				D3610DD8009AA6A5861DE63F,
 				9C13CB70CF675F2067091448,
-				554AE3DDE135E9878C75A018,
 				0F2D2A524257C0C09FC0DCC4,
 				528900DF7BD7E0E9219741C7,
 				BFA165EE119C7769D7721D1B,
@@ -1545,10 +1621,13 @@
 			files = (
 				5D8E38FCBE4D5A21B8D72F1F,
 				434CE5345CCDDF2B1436F338,
+				805D4939EFA7A73A73B02F3E,
 				EA9CD72B8D12D3C543C38BDE,
 				E694BC8A62724F8BE35E49BD,
 				1C5866B73036CB86A2DBA187,
 				855050A882D2BFD58F048DA1,
+				F43C58CE771E61189EDDE35A,
+				4CCA7872D17A2A324D6AE11A,
 				324668C4C6D56060539FCADB,
 				C0A402C41F36DEA9E0D43A48,
 				CD8E9C238CC1C08B376539BA,
@@ -1557,7 +1636,6 @@
 				F96F968B3B68D6F13D3046FD,
 				98E75BD387D2FD198AC9A3AF,
 				4ACD514539CD1056847CDF97,
-				D68A914A6C97D0440E8C4D13,
 				438F471472EBE7D00B8D0696,
 				0D16F4A379F70507F56B9263,
 				5B86AB5CCC075C84238A59CE,
@@ -1681,8 +1759,10 @@
 		};
 		9427245F117ACAB6B0A4B351 = {
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = Green;
 				ASSETCATALOG_COMPILER_APPICON_NAME = Crowns;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Config/Crowns.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_PREVIEWS = YES;
@@ -1690,6 +1770,7 @@
 				INFOPLIST_FILE = "Config/Crowns-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Crowns;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Take a photo of your watch to add it to Crowns.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -1719,8 +1800,10 @@
 		};
 		C4B17B54546A1D55FA7156FD = {
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = Green;
 				ASSETCATALOG_COMPILER_APPICON_NAME = Crowns;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Config/Crowns.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_PREVIEWS = YES;
@@ -1728,6 +1811,7 @@
 				INFOPLIST_FILE = "Config/Crowns-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Crowns;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Take a photo of your watch to add it to Crowns.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

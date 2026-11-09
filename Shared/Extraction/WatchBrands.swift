@@ -118,6 +118,8 @@ enum WatchBrands {
     /// Brands too common as ordinary words to trust inside a sentence or URL.
     private static let ambiguous: Set<String> = ["Ball", "Lip", "Apple", "Orient", "Citizen", "Zenith", "Hamilton", "Laco", "Vaer", "Baltic", "Farer"]
 
+    static var names: [String] { table.map(\.name) }
+
     /// The canonical name if `raw` is a known brand, e.g. "OMEGA" → "Omega".
     static func canonical(_ raw: String) -> String? {
         let key = fold(raw)

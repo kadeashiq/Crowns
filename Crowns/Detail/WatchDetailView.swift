@@ -16,7 +16,7 @@ struct WatchDetailView: View {
         ScrollView {
             VStack(spacing: Space.lg) {
                 WatchImage(watch: watch, size: .full)
-                    .frame(height: 460)
+                    .frame(height: watch.coverData == nil ? 220 : 460)
                     .accessibilityLabel(watch.displayName)
                 info
             }

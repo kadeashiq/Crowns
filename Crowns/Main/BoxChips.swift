@@ -9,19 +9,14 @@ struct BoxChips: View {
     let onEdit: (Box) -> Void
     let onReorder: () -> Void
 
-    @Namespace private var selection
-
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
                 HStack(spacing: Space.xs) {
                     ForEach(boxes) { box in
-                        Button {
+                        ChipButton(title: box.name, selected: box.id == selectedID) {
                             onSelect(box)
-                        } label: {
-                            Chip(title: box.name, selected: box.id == selectedID, namespace: selection)
                         }
-                        .buttonStyle(PressableStyle())
                         .contextMenu {
                             Button("Edit box") { onEdit(box) }
                             if boxes.count > 1 {
@@ -32,20 +27,17 @@ struct BoxChips: View {
                         .zIndex(box.id == selectedID ? 1 : 0)
                         .id(box.id)
                     }
-                    Button(action: onAdd) {
-                        Image(systemName: "plus")
+                    Menu {
+                        Button("New box", systemImage: "plus", action: onAdd)
+                        if boxes.count > 1 {
+                            Button("Reorder boxes", systemImage: "arrow.up.arrow.down", action: onReorder)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
                     }
                     .buttonStyle(.circle(diameter: 40))
-                    .accessibilityLabel("New box")
-                    if boxes.count > 1 {
-                        Button(action: onReorder) {
-                            Image(systemName: "arrow.up.arrow.down")
-                        }
-                        .buttonStyle(.circle(diameter: 40))
-                        .accessibilityLabel("Reorder boxes")
-                    }
+                    .accessibilityLabel("Box options")
                 }
-                .animation(Motion.selection, value: selectedID)
                 .padding(.horizontal, Space.md)
                 .padding(.vertical, Space.sm)
             }
@@ -53,7 +45,7 @@ struct BoxChips: View {
             .scrollClipDisabled()
             .onChange(of: selectedID) { _, id in
                 guard let id else { return }
-                proxy.scrollTo(id, anchor: .center)
+                withAnimation { proxy.scrollTo(id, anchor: .center) }
             }
         }
     }

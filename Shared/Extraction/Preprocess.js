@@ -171,6 +171,15 @@ var CrownsExtractor = (function () {
     return out;
   }
 
+  // Words that mark text as a watch specification. Includes hidden text, so
+  // specs inside closed dropdowns and tabs are found too.
+  var SPEC_WORD = /\b(size|diameter|width|thickness|height|depth|lug|lug-to-lug|case|dial|bezel|crystal|glass|movement|calibre|caliber|winding|power reserve|jewels?|water|strap|bracelet|band|clasp|material|colou?r|year|weight|lume|luminous|complications?|functions?)\b/i;
+  var MEASUREMENT = /\d\s?(mm|atm|bar|m\b|metres|meters|hours?|h\b|jewels)/i;
+
+  function inChrome(el) {
+    return !!el.closest("nav, footer");
+  }
+
   function specs() {
     var pairs = [];
     var seen = {};
@@ -207,7 +216,44 @@ var CrownsExtractor = (function () {
       var cells = rows[k].querySelectorAll("th, td");
       if (cells.length === 2) add(cells[0].textContent, cells[1].textContent);
     }
+    // Any other markup: a label beside its value, or "Label: value".
+    var nodes = document.querySelectorAll("li, p, div, span, strong, b, h2, h3, h4, h5, h6, label");
+    for (var n = 0; n < nodes.length && n < 8000; n++) {
+      var el = nodes[n];
+      if (el.children.length > 1) continue;
+      var text = clean(el.textContent);
+      if (!text || text.length > 170) continue;
+      var inline = text.match(/^([^:：]{2,40})[:：]\s*(.{1,120})$/);
+      if (inline && SPEC_WORD.test(inline[1])) {
+        if (!inChrome(el)) add(inline[1], inline[2]);
+        continue;
+      }
+      if (el.children.length || text.length > 40 || !SPEC_WORD.test(text) || /[.!?]$/.test(text)) continue;
+      var next = el.nextElementSibling;
+      var holder = el.parentElement;
+      if (!next && holder && holder.children.length === 1) next = holder.nextElementSibling;
+      var value = next ? clean(next.textContent) : "";
+      if (!next && holder && clean(holder.textContent).indexOf(text) === 0) value = clean(holder.textContent).slice(text.length);
+      if (!value || inChrome(el)) continue;
+      // Two labels in a row: the "value" is really the next label.
+      if (next && el.className && next.tagName === el.tagName && next.className === el.className) continue;
+      add(text, value);
+    }
     return pairs;
+  }
+
+  // Short lines stating a measurement, for specs written as sentences.
+  function specLines() {
+    var out = [];
+    var nodes = document.querySelectorAll("li, p, dd, td, div, span");
+    for (var i = 0; i < nodes.length && i < 8000 && out.length < 60; i++) {
+      var el = nodes[i];
+      if (el.children.length > 2) continue;
+      var t = clean(el.textContent);
+      if (t.length < 8 || t.length > 220 || !MEASUREMENT.test(t) || !SPEC_WORD.test(t) || inChrome(el)) continue;
+      if (out.indexOf(t) === -1) out.push(t);
+    }
+    return out;
   }
 
   var CURRENCY_HINT = /[£$€¥]|\b(GBP|USD|EUR|CHF|JPY|AUD|CAD|HKD|SGD)\b/;
@@ -318,6 +364,7 @@ var CrownsExtractor = (function () {
     attempt("shopify", shopify);
     attempt("microdata", microdata);
     attempt("specs", specs);
+    attempt("specLines", specLines);
     attempt("priceTexts", priceTexts);
     attempt("images", images);
     attempt("text", pageText);

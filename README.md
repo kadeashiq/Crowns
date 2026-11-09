@@ -34,7 +34,7 @@ Needs Xcode 26, an iPhone on iOS 26, and a **paid** Apple Developer account (fre
 5. Also share from the eBay app or another browser: these send only a link, so it takes a few seconds longer.
 
 **In the app**
-- Chips switch boxes; so does swiping sideways. Long-press a chip to edit its box. The arrows beside the + drag boxes into any order.
+- Chips switch boxes; so does swiping sideways. Long-press a chip to edit its box. The ••• button makes a new box or reorders them.
 - The toggle top right switches Grid and List, and is remembered.
 - Tap a watch: it opens in a sheet. Swipe any sheet down to close it.
 - The + at the bottom adds a watch: paste a link or choose a photo.
@@ -44,8 +44,6 @@ Needs Xcode 26, an iPhone on iOS 26, and a **paid** Apple Developer account (fre
 **Foundation Models doesn't run in the Simulator**: the model fallback is skipped. Use a device.
 
 ### When a site comes out wrong
-
-Settings › **Diagnostics** (debug and TestFlight builds) shows what the extension read from your last 20 shares. Open an entry and export it with the share button. Send me that file; its `snapshotJSON` becomes a test fixture, so the fix stays fixed.
 
 ### Debugging the extension
 

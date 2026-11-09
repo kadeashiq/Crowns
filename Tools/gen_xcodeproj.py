@@ -10,12 +10,19 @@ Target membership is by folder:
     CrownsTests/   unit tests (Swift Testing), Fixtures/ as resources
     Config/        xcconfig, Info.plists, entitlements (not compiled)
 
+To add an app icon, drop a `.icon` file with no spaces in its name into
+Crowns/Icons and re-run: it becomes an alternate icon, gets a preview, and
+appears in Settings by itself. Crowns.icon stays the primary icon.
+
 Re-run after adding or removing files. Adding files in Xcode also works; the
 next run of this script picks them up from disk either way. Object IDs are
 derived from paths, so the output is stable and diffs stay small.
 """
 import hashlib
+import json
 import os
+import shutil
+import subprocess
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJ = os.path.join(ROOT, "Crowns.xcodeproj")
@@ -44,6 +51,38 @@ FILE_TYPES = {
     ".md": "net.daringfireball.markdown",
     ".xcprivacy": "text.xml",
 }
+
+ICTOOL = "/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents/Executables/ictool"
+ICONS = os.path.join(ROOT, "Crowns", "Icons")
+PRIMARY_ICON = "Crowns"
+icon_names = sorted(os.path.splitext(n)[0] for n in os.listdir(ICONS) if n.endswith(".icon"))
+alternate_icons = [n for n in icon_names if n != PRIMARY_ICON]
+
+
+def export_icon_previews():
+    """Renders each icon for the picker, skipping any that haven't changed."""
+    catalog = os.path.join(ROOT, "Crowns", "Assets.xcassets", "IconPreviews")
+    os.makedirs(catalog, exist_ok=True)
+    info = {"info": {"author": "xcode", "version": 1}}
+    with open(os.path.join(catalog, "Contents.json"), "w") as f:
+        json.dump(info, f, indent=2)
+    wanted = {f"IconPreview-{n}.imageset" for n in icon_names}
+    for existing in os.listdir(catalog):
+        if existing.endswith(".imageset") and existing not in wanted:
+            shutil.rmtree(os.path.join(catalog, existing))
+    for name in icon_names:
+        folder = os.path.join(catalog, f"IconPreview-{name}.imageset")
+        os.makedirs(folder, exist_ok=True)
+        source = os.path.join(ICONS, name + ".icon")
+        target = os.path.join(folder, "preview.png")
+        newest = max(os.path.getmtime(os.path.join(d, f)) for d, _, fs in os.walk(source) for f in fs)
+        if not os.path.exists(target) or os.path.getmtime(target) < newest:
+            subprocess.run([ICTOOL, source, "--export-image", "--output-file", target, "--platform", "iOS", "--rendition", "Default", "--width", "264", "--height", "264", "--scale", "1"], check=True, capture_output=True)
+        with open(os.path.join(folder, "Contents.json"), "w") as f:
+            json.dump({"images": [{"filename": "preview.png", "idiom": "universal"}], **info}, f, indent=2)
+
+
+export_icon_previews()
 
 TOP_GROUPS = ["Crowns", "CrownsShare", "Shared", "CrownsTests", "Config"]
 
@@ -161,7 +200,9 @@ RELEASE = {
 }
 TARGET_SETTINGS = {
     "Crowns": {
-        "ASSETCATALOG_COMPILER_APPICON_NAME": "Crowns",
+        "ASSETCATALOG_COMPILER_APPICON_NAME": PRIMARY_ICON,
+        "ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES": " ".join(alternate_icons),
+        "ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS": "YES",
         "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
         "CODE_SIGN_ENTITLEMENTS": "Config/Crowns.entitlements",
         "CODE_SIGN_STYLE": "Automatic",
@@ -170,6 +211,7 @@ TARGET_SETTINGS = {
         "INFOPLIST_FILE": "Config/Crowns-Info.plist",
         "INFOPLIST_KEY_CFBundleDisplayName": "Crowns",
         "INFOPLIST_KEY_LSApplicationCategoryType": "public.app-category.lifestyle",
+        "INFOPLIST_KEY_NSCameraUsageDescription": "Take a photo of your watch to add it to Crowns.",
         "INFOPLIST_KEY_UIApplicationSceneManifest_Generation": "YES",
         "INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents": "YES",
         "INFOPLIST_KEY_UILaunchScreen_Generation": "YES",

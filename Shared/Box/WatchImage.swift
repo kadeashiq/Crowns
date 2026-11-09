@@ -28,6 +28,14 @@ struct WatchImage: View {
                     contentMode: .fill
                 )
             }
+            .overlay {
+                if watch.coverData == nil {
+                    Image(systemName: "watch.analog")
+                        .font(.title)
+                        .foregroundStyle(Theme.inkTertiary)
+                        .accessibilityHidden(true)
+                }
+            }
             .clipped()
     }
 }

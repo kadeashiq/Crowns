@@ -1,21 +1,21 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "display-p3:0.00784,0.35686,0.19608,1.00000",
-      "srgb:0.01569,0.17647,0.10588,1.00000"
+      "display-p3:0.12549,0.13171,0.16382,1.00000",
+      "srgb:0.00000,0.00000,0.00000,1.00000"
     ]
   },
   "groups" : [
     {
       "layers" : [
         {
-          "image-name" : "Emblem.png",
-          "name" : "Emblem",
+          "image-name" : "Silver watch crown with ivory rose.png",
+          "name" : "Silver watch crown with ivory rose",
           "position" : {
             "scale" : 0.575,
             "translation-in-points" : [
-              0.28750000000002274,
-              3.737500000000068
+              0,
+              0
             ]
           }
         }

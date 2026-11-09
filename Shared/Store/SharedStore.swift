@@ -25,10 +25,16 @@ enum SharedStore {
         return base.appending(path: "Crowns.store")
     }
 
-    /// The app's container, syncing with iCloud. Falls back to a local-only
-    /// store if CloudKit can't be set up (no iCloud entitlement, simulator
-    /// without an account), so the app always opens.
+    /// On unless the person has turned it off in Settings.
+    static var syncEnabled: Bool {
+        AppGroup.defaults.object(forKey: SharedKeys.iCloudSync) as? Bool ?? true
+    }
+
+    /// The app's container, syncing with iCloud if that's on. Falls back to a
+    /// local-only store if CloudKit can't be set up (no iCloud entitlement,
+    /// simulator without an account), so the app always opens.
     static func appContainer() -> ModelContainer {
+        guard syncEnabled else { return localContainer() }
         let cloud = ModelConfiguration("Crowns", schema: schema, url: storeURL, cloudKitDatabase: .private(AppGroup.cloudKitContainer))
         do {
             return try ModelContainer(for: schema, migrationPlan: CrownsMigrationPlan.self, configurations: cloud)

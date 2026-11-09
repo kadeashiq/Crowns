@@ -1,73 +1,89 @@
 import SwiftUI
 
-/// One compact sheet: photos, brand and model, price, box, Save.
-/// Everything is editable; nothing has to be. Most saves are two taps.
+/// The form in the share extension, which has no navigation of its own.
 struct AddWatchSheet: View {
     @Bindable var model: AddWatchModel
-    @FocusState private var focus: Field?
-    @Namespace private var boxSelection
-
-    private enum Field { case brand, model, reference, price, notes }
 
     var body: some View {
         NavigationStack {
-            sheet.toolbar(.hidden, for: .navigationBar)
+            AddWatchForm(model: model)
+        }
+        .tint(Theme.ink)
+        .overlay(alignment: .top) {
+            // Extensions don't get the system's indicator.
+            Capsule()
+                .fill(Theme.inkTertiary.opacity(0.4))
+                .frame(width: 36, height: 5)
+                .padding(.top, 5)
         }
     }
+}
 
-    private var sheet: some View {
-        ZStack {
-            Theme.canvas.ignoresSafeArea()
-            content
+/// One standard form: photos, box, details, notes. Everything is editable;
+/// nothing has to be. Most saves are two taps.
+struct AddWatchForm: View {
+    @Bindable var model: AddWatchModel
+    /// Rows for adding a photo by hand, from the app.
+    var photoActions: AnyView? = nil
+    @FocusState private var focus: Field?
+
+    private enum Field: Hashable { case brand, model, reference, price, notes, spec(UUID) }
+
+    private static let typingSuggestionsID = "typing-suggestions"
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            form
+                .onChange(of: focus) { _, field in
+                    guard field == .brand || field == .model else { return }
+                    // Once the keyboard is up, so the suggestions clear it.
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(350))
+                        withAnimation { proxy.scrollTo(Self.typingSuggestionsID, anchor: .center) }
+                    }
+                }
         }
+        .navigationTitle("Add watch")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) { saveButton }
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focus = nil }
+            }
+        }
+        .sensoryFeedback(.selection, trigger: model.visiblePhotoID)
         .background(ViewAnchor { model.hostView = $0 })
     }
 
-    // MARK: - Main
-
-    private var content: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                carousel
-                    .frame(height: 280)
-                    .padding(.horizontal, -(Space.lg - 4))
-                photoChooser
-                fields
-                    .padding(.top, Space.md)
-                boxPicker
-                    .padding(.top, Space.md)
+    private var form: some View {
+        Form {
+            if !model.isManual || !model.photos.isEmpty {
+                Section {
+                    carousel
+                        .frame(height: 280)
+                        .listRowInsets(EdgeInsets())
+                }
             }
-            .padding(.horizontal, Space.lg - 4)
+            photoChooser
+            if let photoActions {
+                Section { photoActions }
+            }
+            photoSuggestions
+            boxSection
+            detailsSection
+            specsSection
+            Section {
+                TextField("Notes", text: $model.notes, axis: .vertical)
+                    .lineLimit(1...4)
+                    .focused($focus, equals: .notes)
+                    .textInputAutocapitalization(.sentences)
+            }
+            .disabled(model.stage == .reading)
         }
-        .scrollIndicators(.hidden)
+        .listSectionSpacing(.compact)
         .scrollDismissesKeyboard(.interactively)
-        .fadingBar(.top) {
-            VStack(spacing: 0) {
-                if model.isExtension {
-                    // Extensions don't get the system's indicator.
-                    Capsule()
-                        .fill(Theme.inkTertiary.opacity(0.4))
-                        .frame(width: 36, height: 5)
-                        .padding(.top, 5)
-                }
-                SheetHeader(title: "Add watch")
-            }
-        }
-        .fadingBar(.bottom) {
-            // While typing, the keyboard's Done takes its place.
-            if focus == nil {
-                VStack(spacing: Space.xs) {
-                    if !model.errorText.isEmpty {
-                        Text(model.errorText)
-                            .font(Typeface.caption)
-                            .foregroundStyle(Theme.ink)
-                    }
-                    saveButton
-                }
-                .padding(.horizontal, Space.lg - 4)
-                .padding(.bottom, Space.sm)
-            }
-        }
+        .animation(.default, value: focus)
     }
 
     // MARK: - Photos
@@ -75,7 +91,8 @@ struct AddWatchSheet: View {
     @ViewBuilder
     private var carousel: some View {
         if model.photos.isEmpty {
-            Theme.hairline.overlay { photoStatus }
+            photoStatus
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
@@ -90,67 +107,40 @@ struct AddWatchSheet: View {
             .scrollTargetBehavior(.paging)
             .scrollIndicators(.hidden)
             .scrollPosition(id: $model.visiblePhotoID)
-            .onChange(of: model.visiblePhotoID) { _, _ in
-                Haptics.tick()
-            }
         }
     }
 
     @ViewBuilder
     private var photoStatus: some View {
-        VStack(spacing: Space.sm) {
-            if let message = model.loadingMessage {
+        if let message = model.loadingMessage {
+            VStack(spacing: Space.sm) {
                 ProgressView()
                     .controlSize(.large)
-                    .tint(Theme.inkSecondary)
                 Text(message)
-                    .font(Typeface.label)
-                    .foregroundStyle(Theme.inkSecondary)
-            } else {
-                Image(systemName: "photo")
-                    .font(Typeface.title)
-                    .foregroundStyle(Theme.inkTertiary)
-                Text(model.foundNothing ? "Couldn't read this page" : "No photos found")
-                    .font(Typeface.label)
-                    .foregroundStyle(Theme.ink)
-                if model.foundNothing {
-                    Text("Add the details yourself below.")
-                        .font(Typeface.caption)
-                        .foregroundStyle(Theme.inkSecondary)
-                }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
+        } else if model.foundNothing {
+            ContentUnavailableView("Couldn't read this page", systemImage: "photo", description: Text("Add the details below."))
+        } else {
+            ContentUnavailableView("No photos found", systemImage: "photo")
         }
     }
 
     /// Picks the one photo to save. Swiping the carousel does the same.
     @ViewBuilder
     private var photoChooser: some View {
-        if model.photos.count > 1 || model.loadingMessage != nil {
-            VStack(alignment: .leading, spacing: Space.xs) {
-                Text("Pick your cover photo")
-                    .font(Typeface.label)
-                    .foregroundStyle(Theme.inkSecondary)
+        if model.photos.count > 1 {
+            Section("Pick your cover photo") {
                 ScrollView(.horizontal) {
                     HStack(spacing: Space.xs) {
-                        if model.photos.isEmpty {
-                            ForEach(0..<6, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                                    .fill(Theme.hairline)
-                                    .frame(width: 52, height: 52)
-                                    .padding(3)
-                            }
-                        } else {
-                            ForEach(Array(model.photos.enumerated()), id: \.element.id) { index, photo in
-                                thumbnail(photo, number: index + 1)
-                            }
+                        ForEach(Array(model.photos.enumerated()), id: \.element.id) { index, photo in
+                            thumbnail(photo, number: index + 1)
                         }
                     }
                 }
                 .scrollIndicators(.hidden)
-                .fullBleed()
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, Space.sm)
         }
     }
 
@@ -180,131 +170,193 @@ struct AddWatchSheet: View {
                     }
                 }
         }
-        .buttonStyle(PressableStyle())
+        .buttonStyle(.borderless)
         .accessibilityLabel("Photo \(number)")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    /// What the photo might show. Tapping one fills in the fields.
+    @ViewBuilder
+    private var photoSuggestions: some View {
+        if model.isIdentifying {
+            Section {
+                HStack(spacing: Space.xs) {
+                    ProgressView()
+                    Text("Looking at your watch…")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } else if !model.suggestions.isEmpty {
+            Section("Might be") {
+                ScrollView(.horizontal) {
+                    HStack(spacing: Space.xs) {
+                        ForEach(model.suggestions) { match in
+                            ChipButton(title: match.title, flat: true) { model.apply(match) }
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+    }
+
     // MARK: - Fields
 
-    private var fields: some View {
-        Card(padding: Space.xs + 2) {
-            VStack(spacing: Space.xs) {
-                row("Brand", text: $model.brand, focus: .brand, skeletonWidth: 90)
-                row("Model", text: $model.model, focus: .model, skeletonWidth: 150)
-                row("Reference", text: $model.reference, focus: .reference, skeletonWidth: 110)
-                    .autocorrectionDisabled()
-                row("Price", text: $model.priceText, focus: .price, prefix: "£", skeletonWidth: 70)
-                    .keyboardType(.decimalPad)
-                if !model.priceNote.isEmpty {
-                    Text(model.priceNote)
-                        .font(.caption)
-                        .foregroundStyle(Theme.inkTertiary)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.horizontal, Space.xxs)
+    private var boxSection: some View {
+        Section {
+            ScrollView(.horizontal) {
+                HStack(spacing: Space.xs) {
+                    ForEach(model.boxes) { box in
+                        ChipButton(title: box.name, selected: box.id == model.selectedBoxID) {
+                            Haptics.tick()
+                            model.selectedBoxID = box.id
+                        }
+                        // Keeps the next chip's shadow off the selected one.
+                        .zIndex(box.id == model.selectedBoxID ? 1 : 0)
+                    }
                 }
-                HStack(alignment: .top, spacing: Space.sm) {
-                    rowLabel("Notes")
-                    TextField("Notes", text: $model.notes, axis: .vertical)
-                        .lineLimit(1...4)
-                        .focused($focus, equals: .notes)
-                }
-                .padding(.vertical, Space.sm)
-                .filledField()
-                .textInputAutocapitalization(.sentences)
+            }
+            .scrollIndicators(.hidden)
+            .scrollClipDisabled()
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+        }
+    }
+
+    private var detailsSection: some View {
+        Section {
+            row("Brand", placeholder: "Add brand", text: $model.brand, focus: .brand, next: .model)
+                .autocorrectionDisabled()
+            typingSuggestions(for: .brand)
+            row("Model", placeholder: "Add model", text: $model.model, focus: .model, next: .reference)
+                .autocorrectionDisabled()
+            typingSuggestions(for: .model)
+            row("Reference", placeholder: "Optional", text: $model.reference, focus: .reference, next: .price)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.characters)
+            row("Price (£)", placeholder: "Optional", text: $model.priceText, focus: .price)
+                .keyboardType(.decimalPad)
+                .accessibilityLabel("Price")
+        } footer: {
+            if !model.errorText.isEmpty {
+                Text(model.errorText)
+            } else if !model.priceNote.isEmpty {
+                Text(model.priceNote)
             }
         }
         .textInputAutocapitalization(.words)
         .disabled(model.stage == .reading)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { focus = nil }
-            }
-        }
     }
 
-    private func row(_ title: String, text: Binding<String>, focus field: Field, prefix: String? = nil, skeletonWidth: CGFloat) -> some View {
-        HStack(spacing: Space.sm) {
-            rowLabel(title)
-            if model.stage == .reading {
-                SkeletonBar(width: skeletonWidth)
-                Spacer(minLength: 0)
-            } else {
-                if let prefix {
-                    Text(prefix).foregroundStyle(Theme.inkSecondary)
+    private var specsSection: some View {
+        Section("Specs") {
+            ForEach($model.specs) { $spec in
+                specRow($spec)
+            }
+            Menu {
+                ForEach(model.unusedSpecLabels, id: \.self) { label in
+                    Button(label) { model.addSpec(label) }
                 }
-                TextField(title, text: text)
-                    .focused($focus, equals: field)
+                Divider()
+                Button("Other") { model.addSpec(nil) }
+            } label: {
+                Label("Add spec", systemImage: "plus")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
             }
         }
-        .filledField()
-    }
-
-    private func rowLabel(_ title: String) -> some View {
-        Text(title)
-            .font(Typeface.secondary)
-            .foregroundStyle(Theme.inkSecondary)
-            .frame(width: 80, alignment: .leading)
-    }
-
-    private var boxPicker: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: Space.xs) {
-                ForEach(model.boxes) { box in
-                    Button {
-                        Haptics.tick()
-                        model.selectedBoxID = box.id
-                    } label: {
-                        Chip(title: box.name, selected: box.id == model.selectedBoxID, namespace: boxSelection)
-                    }
-                    .buttonStyle(PressableStyle())
-                    .zIndex(box.id == model.selectedBoxID ? 1 : 0)
-                }
-            }
-            .animation(Motion.selection, value: model.selectedBoxID)
-            // Room for the chips' shadows inside the scroll area.
-            .padding(.vertical, Space.xl)
-        }
-        .scrollIndicators(.hidden)
-        .fullBleed()
-        .padding(.vertical, Space.sm - Space.xl)
-    }
-
-    private var saveButton: some View {
-        Button {
-            focus = nil
-            Task { await model.save() }
-        } label: {
-            saveLabel
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.pill())
-        .disabled(!model.canSave && model.stage != .saved)
+        .textInputAutocapitalization(.sentences)
+        .disabled(model.stage == .reading)
     }
 
     @ViewBuilder
-    private var saveLabel: some View {
-        switch model.stage {
-        case .saving:
-            HStack(spacing: Space.xs) {
-                ProgressView().tint(Theme.inkTertiary)
-                Text("Saving")
+    private func specRow(_ spec: Binding<EditableSpec>) -> some View {
+        let id = spec.wrappedValue.id
+        if spec.wrappedValue.isCustom {
+            HStack(spacing: Space.sm) {
+                TextField("Label", text: spec.label)
+                specValueField(spec, id: id, accessibilityTitle: "Value")
             }
-        case .saved:
-            Label("Saved", systemImage: "checkmark")
-        default:
-            Text(model.loadingMessage == nil ? "Save" : "Loading…")
+        } else {
+            LabeledContent(spec.wrappedValue.label) {
+                if model.stage == .reading {
+                    Text("Reading listing")
+                        .redacted(reason: .placeholder)
+                } else {
+                    specValueField(spec, id: id, accessibilityTitle: spec.wrappedValue.label)
+                }
+            }
         }
     }
-}
 
-private extension View {
-    /// Runs a horizontal row to the sheet's edges, with its content still
-    /// lined up with the margins.
-    func fullBleed() -> some View {
-        contentMargins(.horizontal, Space.lg - 4, for: .scrollContent)
-            .padding(.horizontal, -(Space.lg - 4))
+    private func specValueField(_ spec: Binding<EditableSpec>, id: UUID, accessibilityTitle: String) -> some View {
+        TextField("Optional", text: spec.value, axis: .vertical)
+            .lineLimit(1...3)
+            .multilineTextAlignment(.trailing)
+            .focused($focus, equals: .spec(id))
+            .accessibilityLabel(accessibilityTitle)
+    }
+
+    private func row(_ title: String, placeholder: String, text: Binding<String>, focus field: Field, next: Field? = nil) -> some View {
+        LabeledContent(title) {
+            if model.stage == .reading {
+                Text("Reading listing")
+                    .redacted(reason: .placeholder)
+            } else {
+                TextField(placeholder, text: text)
+                    .multilineTextAlignment(.trailing)
+                    .focused($focus, equals: field)
+                    .submitLabel(next == nil ? .done : .next)
+                    .onSubmit { focus = next }
+                    .accessibilityLabel(title)
+            }
+        }
+    }
+
+    private var typingMatches: [WatchCatalog.Match] {
+        switch focus {
+        case .brand: WatchCatalog.brands(matching: model.brand)
+        case .model: WatchCatalog.models(matching: model.model, brand: model.brand)
+        default: []
+        }
+    }
+
+    /// Brands or models that fit what's been typed, under the field in use.
+    @ViewBuilder
+    private func typingSuggestions(for field: Field) -> some View {
+        if focus == field, !typingMatches.isEmpty {
+            ScrollView(.horizontal) {
+                HStack(spacing: Space.xs) {
+                    ForEach(typingMatches) { match in
+                        ChipButton(title: match.model.isEmpty || model.brand.isEmpty ? match.title : match.model, flat: true) {
+                            model.apply(match)
+                            if focus == .brand { focus = .model }
+                        }
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+            .id(Self.typingSuggestionsID)
+        }
+    }
+
+    // MARK: - Saving
+
+    @ViewBuilder
+    private var saveButton: some View {
+        switch model.stage {
+        case .saving:
+            ProgressView()
+        case .saved:
+            Image(systemName: "checkmark")
+                .accessibilityLabel("Saved")
+        default:
+            Button("Save") {
+                focus = nil
+                Task { await model.save() }
+            }
+            .disabled(!model.canSave)
+        }
     }
 }
 

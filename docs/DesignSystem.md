@@ -1,8 +1,8 @@
 # Crowns design system
 
-Flat, black, white and greys. Watches are the only colour on screen; the app icon (`Crowns/Crowns.icon`, made in Icon Composer) is the one thing that sits outside this. Hierarchy comes from drop shadows, not materials, borders or gradients. No wood, suede, brass or Liquid Glass.
+Flat, black, white and greys. Watches are the only colour on screen; the app icons (`Crowns/Icons/`, made in Icon Composer) is the one thing that sits outside this. Hierarchy comes from drop shadows, not materials, borders or gradients. No wood, suede, brass or Liquid Glass.
 
-The code lives in `Shared/Design/`. To see every token and component running, open Settings › Design system (debug and TestFlight builds only).
+The code lives in `Shared/Design/`.
 
 ## Colour (`Theme`)
 
@@ -47,13 +47,14 @@ System font on Dynamic Type: `display`, `title`, `heading`, `body`, `button`, `l
 | `.circle(.primary / .surface / .flat)` | `Buttons.swift` | Icon buttons |
 | `CardButtonStyle` | `Buttons.swift` | A whole card as a button |
 | `Card`, `FormSection`, `ValueRow`, `RowDivider` | `Components.swift` | Grouped content |
-| `Chip`, `IconSegments` | `Components.swift` | The black selection slides between options |
-| `CountStepper`, `.filledField()`, `SheetHeader`, `SkeletonBar` | `Components.swift` | Forms and sheets |
+| `ChipButton` | `Components.swift` | System filled capsule; the selected one is black |
+| `IconSegments` | `Components.swift` | The black selection slides between options |
+| `CountStepper`, `.filledField()`, `SheetHeader` | `Components.swift` | Forms and sheets |
 | `WatchImage`, `WatchGrid`, `WatchCell` | `Shared/Box/` | Photos fill their containers, edge to edge |
 
 ## Motion (`Motion`)
 
-Screens change through native SwiftUI sheets and nothing else: no custom fades, slides, flying elements or toasts. Content swaps instantly. Only two things are animated by hand, both springs: `press` for touch feedback and `selection` for the indicator on chips and toggles.
+Screens change through native SwiftUI sheets and nothing else: no custom fades, slides, flying elements or toasts. Content swaps instantly. Only two things are animated by hand, both springs: `press` for touch feedback and `selection` for the indicator on toggles.
 
 ## Rules
 

@@ -32,10 +32,20 @@ enum ShareInputReader {
     /// A web link from pasted items (a URL, or text containing one).
     static func firstURL(from providers: [NSItemProvider]) async -> URL? {
         for provider in providers {
-            if let url = await load(.url, from: provider, as: URL.self), isWeb(url) { return url }
-            if let text = await load(.plainText, from: provider, as: String.self), let url = firstLink(in: text) { return url }
+            if let url = await object(URL.self, from: provider), isWeb(url) { return url }
+            if let text = await object(String.self, from: provider), let url = firstLink(in: text) { return url }
         }
         return nil
+    }
+
+    /// Pasted items arrive as encoded data, so the provider has to decode them.
+    private static func object<T: _ObjectiveCBridgeable>(_ type: T.Type, from provider: NSItemProvider) async -> T? where T._ObjectiveCType: NSItemProviderReading {
+        guard provider.canLoadObject(ofClass: type) else { return nil }
+        return await withCheckedContinuation { continuation in
+            _ = provider.loadObject(ofClass: type) { value, _ in
+                continuation.resume(returning: value)
+            }
+        }
     }
 
     private static func load<T>(_ type: UTType, from provider: NSItemProvider, as _: T.Type) async -> T? {

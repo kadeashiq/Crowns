@@ -1,6 +1,6 @@
 # Crowns privacy policy
 
-_Draft. Host this page somewhere public and set `CROWNS_PRIVACY_URL` in `Config/Crowns.xcconfig`._
+_The live policy is at https://www.kadeashiq.co/crowns/privacy (repo: `kadeashiq-portfolio`). Update it there._
 
 Crowns doesn't collect any data about you.
 
@@ -16,4 +16,4 @@ Crowns doesn't collect any data about you.
 
 No analytics, no advertising, no tracking.
 
-Contact: _your email here_
+Contact: hello@kadeashiq.co

@@ -15,6 +15,9 @@ struct EditWatchSheet: View {
     @State private var source = ""
     @State private var specs: [EditableSpec] = []
     @State private var coverPhotoID: UUID?
+    @State private var newPhoto: ImageFetcher.Photo?
+    @State private var photoError = ""
+    @State private var isTakingPhoto = false
     @State private var working = false
 
     private struct EditableSpec: Identifiable {
@@ -50,6 +53,9 @@ struct EditWatchSheet: View {
                 let photos = watch.sortedPhotos
                 if photos.count > 1 {
                     coverPicker(photos)
+                }
+                if photos.isEmpty {
+                    photoSection
                 }
 
                 specsSection
@@ -87,6 +93,38 @@ struct EditWatchSheet: View {
         }
         .background(Theme.canvas)
         .onAppear(perform: load)
+    }
+
+    /// A watch added by hand may not have a photo yet.
+    private var photoSection: some View {
+        FormSection(title: "Photo", footer: photoError) {
+            VStack(spacing: Space.sm) {
+                if let newPhoto {
+                    Image(uiImage: newPhoto.preview)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 120, height: 120)
+                        .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                        .accessibilityLabel("New photo")
+                }
+                WatchPhotoButtons(
+                    hasPhoto: newPhoto != nil,
+                    isTakingPhoto: $isTakingPhoto,
+                    onPhoto: usePhoto,
+                    onFailure: { photoError = "Couldn't read that photo" }
+                )
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func usePhoto(_ data: Data) {
+        guard let photo = ImageFetcher.photo(from: data) else {
+            photoError = "Couldn't read that photo"
+            return
+        }
+        photoError = ""
+        newPhoto = photo
     }
 
     private func coverPicker(_ photos: [WatchPhoto]) -> some View {
@@ -180,6 +218,12 @@ struct EditWatchSheet: View {
             reordered.insert(chosen, at: 0)
             for (index, photo) in reordered.enumerated() { photo.index = index }
             WatchRecorder.setCover(of: watch, photo: data)
+        }
+        if let newPhoto {
+            let stored = WatchPhoto(data: newPhoto.data, index: 0)
+            context.insert(stored)
+            stored.watch = watch
+            WatchRecorder.setCover(of: watch, photo: newPhoto.data)
         }
         try? context.save()
         working = false

@@ -27,4 +27,5 @@ enum AppGroup {
 enum SharedKeys {
     static let lastBoxID = "lastBoxID"
     static let externalSaveStamp = "externalSaveStamp"
+    static let iCloudSync = "iCloudSync"
 }

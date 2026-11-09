@@ -9,32 +9,21 @@ import UIKit
 ///    ask LinkPresentation for a title and image.
 /// 4. Still missing brand, model or price: the on-device Foundation Model
 ///    reads the page text.
-/// 5. Convert foreign prices to pounds.
+/// 5. Still missing key specs: the same model looks for just those.
+/// 6. Convert foreign prices to pounds.
 @MainActor
 enum ExtractionPipeline {
     struct Outcome {
         var draft: ListingDraft
-        var snapshotJSON: String?
         /// An image from a fallback that has bytes but no URL.
         var extraImage: Data?
-        var steps: [String]
     }
 
     static func run(snapshotJSON: String?, url: URL?, host: UIView?) async -> Outcome {
-        var steps: [String] = []
-        var json = snapshotJSON
-        var snapshot = json.flatMap(PageSnapshot.decode)
-        if snapshot != nil {
-            steps.append("safari")
-        } else if let url {
+        var snapshot = snapshotJSON.flatMap(PageSnapshot.decode)
+        if snapshot == nil, let url {
             let reader = WebPageReader()
-            if let read = await reader.snapshot(of: url, attachedTo: host) {
-                snapshot = read.snapshot
-                json = read.json
-                steps.append("webview")
-            } else {
-                steps.append("webview-failed")
-            }
+            snapshot = await reader.snapshot(of: url, attachedTo: host)?.snapshot
         }
 
         var draft = snapshot.map(ListingInterpreter.interpret) ?? ListingDraft()
@@ -51,33 +40,29 @@ enum ExtractionPipeline {
         let structured = snapshot?.hasStructuredData ?? false
         if !structured, draft.isThin, let link = draft.sourceURL {
             if let preview = await LinkPreviewFallback.fetch(link) {
-                steps.append("linkpresentation")
                 draft.sources.insert(.linkPresentation)
                 if let title = preview.title { ListingInterpreter.applyTitle(title, to: &draft) }
                 extraImage = preview.imageData
-            } else {
-                steps.append("linkpresentation-failed")
             }
         }
         // On-device model over the page text, for pages the structure missed.
         if let text = snapshot?.text, text.count > 80,
            draft.brand.isEmpty || draft.model.isEmpty || (!structured && draft.price == nil) {
-            let before = draft
             await FoundationModelsFallback.fill(&draft, title: snapshot?.title ?? draft.pageTitle, text: text)
-            steps.append(draft == before ? "foundationmodels-nothing" : "foundationmodels")
+        }
+
+        // Specs the page reading couldn't place, such as ones written as prose.
+        let specText = ((snapshot?.specLines ?? []) + [draft.summary, snapshot?.text ?? ""]).joined(separator: "\n")
+        if specText.count > 80, SpecNormalizer.essentials.contains(where: { label in !draft.specs.contains { $0.label == label } }) {
+            await FoundationModelsFallback.fillSpecs(&draft, text: specText)
         }
 
         // Prices are always pounds.
-        if let price = draft.price, !price.isGBP {
-            if let converted = await CurrencyConverter.toGBP(price) {
-                draft.originalPrice = price
-                draft.price = converted
-                steps.append("converted-\(price.currency)")
-            } else {
-                steps.append("no-rate-\(price.currency)")
-            }
+        if let price = draft.price, !price.isGBP, let converted = await CurrencyConverter.toGBP(price) {
+            draft.originalPrice = price
+            draft.price = converted
         }
 
-        return Outcome(draft: draft, snapshotJSON: json, extraImage: extraImage, steps: steps)
+        return Outcome(draft: draft, extraImage: extraImage)
     }
 }
