@@ -34,29 +34,49 @@ enum ImageFetcher {
         return URLSession(configuration: config)
     }()
 
-    /// Fetches up to `limit` usable photos and hands each one over once every
-    /// photo ahead of it has been dealt with, so they arrive in the order given.
-    static func photos(from urls: [URL], referer: URL?, limit: Int = 8, deliver: @escaping @MainActor @Sendable (Photo) -> Void) async {
+    /// Fetches up to `limit` usable photos and hands them over in the order
+    /// given, for as long as `patience` lasts. After that, one slow photo no
+    /// longer holds up the rest, which arrive as they come.
+    static func photos(from urls: [URL], referer: URL?, limit: Int = 8, patience: Duration = .seconds(3), deliver: @escaping @MainActor @Sendable (Photo) -> Void) async {
         let candidates = Array(urls.prefix(limit + 4))
+        guard !candidates.isEmpty else { return }
         await withTaskGroup(of: (Int, Photo?).self) { group in
             for (index, url) in candidates.enumerated() {
                 group.addTask { (index, await photo(from: url, referer: referer)) }
             }
-            var finished: [Int: Photo?] = [:]
+            group.addTask {
+                try? await Task.sleep(for: patience)
+                return (-1, nil)
+            }
+            var waiting: [Int: Photo?] = [:]
             var next = 0
+            var settled = 0
             var delivered = 0
+            var inOrder = true
             for await (index, photo) in group {
-                finished[index] = .some(photo)
-                while let result = finished.removeValue(forKey: next) {
+                if index < 0 {
+                    inOrder = false
+                } else {
+                    settled += 1
+                    waiting[index] = .some(photo)
+                }
+                var ready: [Photo] = []
+                while let result = waiting.removeValue(forKey: next) {
                     next += 1
-                    guard let result else { continue }
-                    await deliver(result)
+                    if let result { ready.append(result) }
+                }
+                if !inOrder {
+                    ready += waiting.keys.sorted().compactMap { waiting.removeValue(forKey: $0) ?? nil }
+                }
+                for photo in ready {
+                    await deliver(photo)
                     delivered += 1
                     if delivered == limit {
                         group.cancelAll()
                         return
                     }
                 }
+                if settled == candidates.count { group.cancelAll() }
             }
         }
     }

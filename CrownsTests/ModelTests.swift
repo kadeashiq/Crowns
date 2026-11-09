@@ -221,6 +221,26 @@ struct ModelTests {
         #expect(context.changedModelsArray.count == 1)
     }
 
+    @Test func clearedFieldsStayClearWhenTheReadersReportAgain() throws {
+        let context = try memoryContext()
+        let model = AddWatchModel(context: context, isExtension: false) { _ in }
+        var found = ListingDraft()
+        found.brand = "Omega"
+        found.specs = [Spec(label: "Dial", value: "Blue")]
+        model.merge(found)
+        #expect(model.brand == "Omega")
+        #expect(model.specs.first { $0.label == "Dial" }?.value == "Blue")
+
+        model.brand = ""
+        if let dial = model.specs.firstIndex(where: { $0.label == "Dial" }) { model.specs[dial].value = "" }
+        found.model = "Seamaster"
+        model.merge(found)
+
+        #expect(model.brand.isEmpty)
+        #expect(model.specs.first { $0.label == "Dial" }?.value.isEmpty == true)
+        #expect(model.model == "Seamaster")
+    }
+
     @Test func photosCanBeSavedOnceTheFirstHasArrived() throws {
         let context = try memoryContext()
         let model = AddWatchModel(context: context, isExtension: false) { _ in }

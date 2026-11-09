@@ -103,10 +103,20 @@ enum SpecNormalizer {
         return ordered(out)
     }
 
-    /// For specs written as sentences: "a case thickness of 9.5mm".
+    /// Between a label and its number: words that would mean the number
+    /// belongs to something else on the watch.
+    private static let labelGap = #"(?:(?!lug|length|thick|height|depth|crystal|strap|bracelet|clasp|\bto\b|[+/])[^.\n\d]){0,24}"#
+
+    /// For specs written as sentences: "a case thickness of 9.5mm", "36mm case width".
     private static let sentencePatterns: [(String, [String], (String) -> String)] = [
-        ("Case size", [#"(?:case|diameter|width)[^.\n\d]{0,24}(\d{2}(?:\.\d+)?)\s?mm"#], { "\($0) mm" }),
-        ("Thickness", [#"(?:thick(?:ness)?|height|depth)[^.\n\d]{0,24}(\d{1,2}(?:\.\d+)?)\s?mm"#, #"(\d{1,2}(?:\.\d+)?)\s?mm\s+(?:thick|high)"#], { "\($0) mm" }),
+        ("Case size", [
+            #"(?<![\d.])(\d{2}(?:\.\d+)?)\s?mm\s+(?:(?:case\s+)?(?:width|diameter)|case\b(?!\s+(?:length|thick|height|depth|back)))"#,
+            #"\b(?:case|diameter|(?<!lug )(?<!strap )(?<!band )(?<!bracelet )width)"# + labelGap + #"(\d{2}(?:\.\d+)?)\s?mm"#,
+        ], { "\($0) mm" }),
+        ("Thickness", [
+            #"(?<![\d.])(\d{1,2}(?:\.\d+)?)\s?mm\s+(?:case\s+)?(?:thick|high\b|height|depth)"#,
+            #"(?<!crystal )\b(?:thick(?:ness)?|height|depth)"# + labelGap + #"(\d{1,2}(?:\.\d+)?)\s?mm"#,
+        ], { "\($0) mm" }),
         ("Water resistance", [#"water[- ]?resist\w*[^.\n\d]{0,24}(\d+\s?(?:m|metres|meters|atm|bar)\b)"#, #"(\d+\s?(?:m|metres|meters|atm|bar))\s+water[- ]?resist"#], { $0 }),
         ("Power reserve", [#"power reserve[^.\n\d]{0,24}(\d+)\s?h"#, #"(\d+)[- ]?hours?[^.\n]{0,20}power reserve"#], { "\($0) hours" }),
     ]

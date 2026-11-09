@@ -24,11 +24,11 @@ enum ExtractionPipeline {
         }
     }
 
-    static func read(snapshotJSON: String?, url: URL?, host: UIView?) async -> Reading {
-        var snapshot = snapshotJSON.flatMap(PageSnapshot.decode)
+    static func read(snapshot given: PageSnapshot?, url: URL?, host: UIView?) async -> Reading {
+        var snapshot = given
         if snapshot == nil, let url {
             let reader = WebPageReader()
-            snapshot = await reader.snapshot(of: url, attachedTo: host)?.snapshot
+            snapshot = await reader.snapshot(of: url, attachedTo: host)
         }
 
         var draft = snapshot.map(ListingInterpreter.interpret) ?? ListingDraft()
@@ -46,6 +46,7 @@ enum ExtractionPipeline {
     /// Runs the slower steps, publishing the draft after each one that may
     /// have found something.
     static func enrich(_ reading: Reading, preview: LinkPreviewFallback.Preview?, publish: (ListingDraft) -> Void) async {
+        guard !Task.isCancelled else { return }
         var draft = reading.draft
         let snapshot = reading.snapshot
         let structured = snapshot?.hasStructuredData ?? false

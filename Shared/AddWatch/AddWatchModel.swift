@@ -86,6 +86,8 @@ final class AddWatchModel {
     let isExtension: Bool
 
     @ObservationIgnored private var draft = ListingDraft()
+    /// What the readers had last reported, to tell new findings from old ones.
+    @ObservationIgnored private var lastFound = ListingDraft()
     @ObservationIgnored private var startTask: Task<Void, Never>?
     @ObservationIgnored private var photoTask: Task<Void, Never>?
     @ObservationIgnored private var enrichTask: Task<Void, Never>?
@@ -192,15 +194,17 @@ final class AddWatchModel {
 
     private func read(snapshotJSON: String?, url: URL?) async {
         FoundationModelsFallback.prewarm()
-        if snapshotJSON == nil {
+        let snapshot = snapshotJSON.flatMap(PageSnapshot.decode)
+        if snapshot == nil {
             // Let the sheet's anchor view appear so the web reader has a window.
             for _ in 0..<10 where hostView == nil {
                 try? await Task.sleep(for: .milliseconds(30))
             }
         }
-        let reading = await ExtractionPipeline.read(snapshotJSON: snapshotJSON, url: url, host: hostView)
+        let reading = await ExtractionPipeline.read(snapshot: snapshot, url: url, host: hostView)
         guard !Task.isCancelled else { return }
         draft = reading.draft
+        lastFound = reading.draft
         brand = draft.brand
         model = draft.model
         reference = draft.reference
@@ -241,13 +245,16 @@ final class AddWatchModel {
         }
     }
 
-    /// Takes what a slower reader found. The form is open by now, so this
-    /// only fills what's still empty and never replaces anything typed.
-    private func merge(_ found: ListingDraft) {
-        if brand.isEmpty { brand = found.brand }
-        if model.isEmpty { model = found.model }
-        if reference.isEmpty { reference = found.reference }
-        for spec in found.specs {
+    /// Takes what a slower reader found. The form is open by now, so only
+    /// new findings count, and they only go into fields that are still empty:
+    /// nothing typed is replaced and nothing cleared comes back.
+    func merge(_ found: ListingDraft) {
+        let before = lastFound
+        lastFound = found
+        if found.brand != before.brand, brand.isEmpty { brand = found.brand }
+        if found.model != before.model, model.isEmpty { model = found.model }
+        if found.reference != before.reference, reference.isEmpty { reference = found.reference }
+        for spec in found.specs where !before.specs.contains(spec) {
             if let index = specs.firstIndex(where: { $0.label == spec.label }) {
                 if specs[index].value.isEmpty { specs[index].value = spec.value }
             } else {
@@ -344,6 +351,8 @@ final class AddWatchModel {
 
     /// Stops any work in progress and leaves the sheet as it is.
     func stop() {
+        // A save in progress is still waiting on its price.
+        guard stage != .saving else { return }
         startTask?.cancel()
         photoTask?.cancel()
         enrichTask?.cancel()

@@ -205,3 +205,30 @@ struct ReferenceDetectorTests {
         #expect(ReferenceDetector.best(in: text) == nil)
     }
 }
+
+@Suite("Specs in sentences")
+struct SentenceSpecTests {
+    private func read(_ text: String) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: SpecNormalizer.specs(from: SpecTable([]), title: "", text: text).map { ($0.label, $0.value) })
+    }
+
+    @Test func numberBeforeTheLabel() {
+        let specs = read("36mm case width8.8mm case thickness + 1.6mm dome crystal44mm case length / lug-to-lug20mm lug width tapers to 16mm at clasp")
+        #expect(specs["Case size"] == "36 mm")
+        #expect(specs["Thickness"] == "8.8 mm")
+    }
+
+    @Test func labelBeforeTheNumber() {
+        let specs = read("A case diameter of 41 mm and a case thickness of 12.5mm")
+        #expect(specs["Case size"] == "41 mm")
+        #expect(specs["Thickness"] == "12.5 mm")
+    }
+
+    @Test func otherPartsAreNotTheCase() {
+        #expect(read("20mm lug width tapers to 16mm at clasp")["Case size"] == nil)
+        #expect(read("Lug width: 20mm")["Case size"] == nil)
+        #expect(read("The bracelet tapers from 20mm at the case to 16mm at the clasp")["Case size"] == nil)
+        #expect(read("44mm case length")["Case size"] == nil)
+        #expect(read("Sapphire crystal thickness 1.6mm")["Thickness"] == nil)
+    }
+}

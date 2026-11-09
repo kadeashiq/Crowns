@@ -20,7 +20,7 @@ final class WebPageReader: NSObject, WKNavigationDelegate {
 
     /// - Parameter host: a view to attach the web view to. WebKit throttles
     ///   pages that aren't in a window, so pass the visible sheet's view.
-    func snapshot(of url: URL, attachedTo host: UIView?, timeout: TimeInterval = 14) async -> (snapshot: PageSnapshot, json: String)? {
+    func snapshot(of url: URL, attachedTo host: UIView?, timeout: TimeInterval = 14) async -> PageSnapshot? {
         guard !ExtractorScript.source.isEmpty else { return nil }
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
@@ -49,52 +49,62 @@ final class WebPageReader: NSObject, WKNavigationDelegate {
         }
     }
 
-    private func read(_ web: WKWebView, started: Date, timeout: TimeInterval) async -> (snapshot: PageSnapshot, json: String)? {
+    private func read(_ web: WKWebView, started: Date, timeout: TimeInterval) async -> PageSnapshot? {
         // Most of a load is images and trackers the form doesn't need. A page
         // that has given a whole listing, the same one twice running, is done.
         var previous: ListingDraft?
         while !isLoaded, Date().timeIntervalSince(started) < timeout {
             await waitForLoad(limit: Self.probeInterval)
-            guard !isLoaded, isCommitted, await isInteractive(web),
-                  let result = await evaluate(in: web), isWholeListing(result.snapshot) else {
+            if isLoaded { break }
+            guard isCommitted, await mayHoldListing(web), let snapshot = await evaluate(in: web),
+                  let draft = wholeListing(in: snapshot) else {
                 previous = nil
                 continue
             }
-            let draft = ListingInterpreter.interpret(result.snapshot)
-            if draft == previous { return result }
+            if draft == previous { return snapshot }
             previous = draft
         }
         guard !Task.isCancelled else { return nil }
+
+        // A page that was already giving a whole listing needs no more time.
+        if previous != nil, let snapshot = await evaluate(in: web), wholeListing(in: snapshot) != nil {
+            return snapshot
+        }
 
         // Give client-rendered pages a moment, then retry once if the first
         // read found nothing product-like.
         try? await Task.sleep(for: .milliseconds(700))
         var result = await evaluate(in: web)
         let remaining = timeout - Date().timeIntervalSince(started)
-        if remaining > 1.5, result.map({ !$0.snapshot.hasStructuredData && ($0.snapshot.images ?? []).isEmpty }) ?? true {
+        if remaining > 1.5, result.map({ !$0.hasStructuredData && ($0.images ?? []).isEmpty }) ?? true {
             try? await Task.sleep(for: .milliseconds(1500))
             result = await evaluate(in: web) ?? result
         }
         return result
     }
 
-    private func isWholeListing(_ snapshot: PageSnapshot) -> Bool {
-        guard snapshot.hasStructuredData, !(snapshot.specs ?? []).isEmpty, !(snapshot.images ?? []).isEmpty else { return false }
+    /// The listing, if the page gives all of it.
+    private func wholeListing(in snapshot: PageSnapshot) -> ListingDraft? {
+        guard snapshot.hasStructuredData, !(snapshot.specs ?? []).isEmpty, !(snapshot.images ?? []).isEmpty else { return nil }
         let draft = ListingInterpreter.interpret(snapshot)
-        return !draft.brand.isEmpty && !draft.model.isEmpty && draft.price != nil && !draft.imageURLs.isEmpty
+        return !draft.brand.isEmpty && !draft.model.isEmpty && draft.price != nil && !draft.imageURLs.isEmpty ? draft : nil
     }
 
-    private func isInteractive(_ web: WKWebView) async -> Bool {
-        let state = try? await web.callAsyncJavaScript("return document.readyState;", arguments: [:], in: nil, contentWorld: .defaultClient)
-        return (state as? String).map { $0 != "loading" } ?? false
+    /// A cheap look before running the full extractor. A page without
+    /// structured data can never finish early, so isn't worth reading yet.
+    private func mayHoldListing(_ web: WKWebView) async -> Bool {
+        let script = """
+            return document.readyState !== "loading" && document.querySelector('script[type="application/ld+json"], meta[property$="price:amount"], meta[name$="price:amount"]') !== null;
+            """
+        let found = try? await web.callAsyncJavaScript(script, arguments: [:], in: nil, contentWorld: .defaultClient)
+        return found as? Bool ?? false
     }
 
-    private func evaluate(in web: WKWebView) async -> (snapshot: PageSnapshot, json: String)? {
+    private func evaluate(in web: WKWebView) async -> PageSnapshot? {
         let body = ExtractorScript.source + "\nreturn CrownsExtractor.snapshot();"
         do {
             let value = try await web.callAsyncJavaScript(body, arguments: [:], in: nil, contentWorld: .defaultClient)
-            guard let json = value as? String, let snapshot = PageSnapshot.decode(json) else { return nil }
-            return (snapshot, json)
+            return (value as? String).flatMap(PageSnapshot.decode)
         } catch {
             Self.log.error("Extractor failed: \(error.localizedDescription, privacy: .public)")
             return nil
