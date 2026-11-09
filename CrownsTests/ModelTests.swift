@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftUI
 import Testing
 import UIKit
 
@@ -13,6 +14,101 @@ private func memoryContext() throws -> ModelContext {
 @Suite("Boxes and watches")
 @MainActor
 struct ModelTests {
+    private func filledBox(_ context: ModelContext, count: Int) -> (Box, [Watch]) {
+        let box = Box(name: "Test", columns: 2, rows: 2)
+        context.insert(box)
+        let watches = (0..<count).map { index -> Watch in
+            let watch = Watch()
+            context.insert(watch)
+            watch.box = box
+            watch.slot = index
+            return watch
+        }
+        return (box, watches)
+    }
+
+    @Test func gridsAddColumnsAsTheWindowWidens() {
+        #expect(GridMetrics.columns(forWidth: 0, preferred: 2) == 2)
+        #expect(GridMetrics.columns(forWidth: 402, preferred: 2) == 2)
+        #expect(GridMetrics.columns(forWidth: 466, preferred: 2) == 2)
+        #expect(GridMetrics.columns(forWidth: 834, preferred: 2) == 4)
+        #expect(GridMetrics.columns(forWidth: 1194, preferred: 2) == 5)
+        #expect(GridMetrics.columns(forWidth: 440, preferred: 4) == 4)
+        #expect(GridMetrics.columns(forWidth: 834, preferred: 1) == 2)
+    }
+
+    @Test func onlyALargeLandscapeWindowNarrowsItsContent() {
+        #expect(Layout.contentWidth(in: CGSize(width: 402, height: 874)) == 402)
+        #expect(Layout.contentWidth(in: CGSize(width: 834, height: 1210)) == 834)
+        #expect(Layout.contentWidth(in: CGSize(width: 951, height: 669)) == 951)
+        #expect(Layout.contentWidth(in: CGSize(width: 1210, height: 834)) == 847)
+    }
+
+    private struct Card: Identifiable, Equatable {
+        let id: Int
+    }
+
+    private func cards(_ ids: Int...) -> [Card] { ids.map(Card.init) }
+
+    @Test func aDroppedCardLandsBeforeItsAnchor() {
+        #expect(cards(0, 1, 2, 3).placing([3], before: 1) == cards(0, 3, 1, 2))
+        #expect(cards(0, 1, 2, 3).placing([0], before: 2) == cards(1, 0, 2, 3))
+        #expect(cards(0, 1, 2, 3).placing([1], before: 0) == cards(1, 0, 2, 3))
+    }
+
+    @Test func aCardDroppedWithNoAnchorGoesLast() {
+        #expect(cards(0, 1, 2).placing([0], before: nil) == cards(1, 2, 0))
+        #expect(cards(0, 1, 2).placing([2], before: nil) == cards(0, 1, 2))
+    }
+
+    @Test func cardsDroppedTogetherKeepTheOrderTheyWerePickedIn() {
+        #expect(cards(0, 1, 2, 3).placing([3, 2], before: 0) == cards(3, 2, 0, 1))
+        #expect(cards(0, 1, 2, 3).placing([0, 2], before: nil) == cards(1, 3, 0, 2))
+    }
+
+    @Test func aDropNeverLosesOrRepeatsACard() {
+        // The anchor is one of the cards picked up.
+        #expect(cards(0, 1, 2, 3).placing([1, 2], before: 2) == cards(0, 1, 2, 3))
+        #expect(cards(0, 1, 2, 3).placing([3, 1], before: 1) == cards(0, 3, 1, 2))
+        // Cards and anchors the grid has never seen.
+        #expect(cards(0, 1, 2).placing([9, 1, 1], before: 0) == cards(1, 0, 2))
+        #expect(cards(0, 1, 2).placing([0], before: 9) == cards(1, 2, 0))
+        #expect(cards().placing([4], before: nil) == cards())
+    }
+
+    @Test func seatingWritesOnlyTheSlotsThatChange() throws {
+        let context = try memoryContext()
+        let (box, w) = filledBox(context, count: 4)
+        try context.save()
+
+        box.seat([w[0], w[1], w[2], w[3]])
+        #expect(!context.hasChanges)
+
+        box.seat([w[0], w[2], w[1], w[3]])
+        #expect(box.sortedWatches.map(\.id) == [w[0], w[2], w[1], w[3]].map(\.id))
+        #expect(box.sortedWatches.map(\.slot) == [0, 1, 2, 3])
+        #expect(Set(context.changedModelsArray.map(\.persistentModelID)) == [w[1].persistentModelID, w[2].persistentModelID])
+    }
+
+    @Test func seatingClosesGapsAndGrowsTheBox() throws {
+        let (box, w) = filledBox(try memoryContext(), count: 5)
+        w[4].slot = 9
+        box.rows = 1
+        box.seat([w[4], w[0], w[1], w[2], w[3]])
+        #expect(box.sortedWatches.map(\.id) == [w[4], w[0], w[1], w[2], w[3]].map(\.id))
+        #expect(box.sortedWatches.map(\.slot) == [0, 1, 2, 3, 4])
+        #expect(box.rows == 3)
+    }
+
+    @Test func cardGridFillsRowsFromTheTopLeft() {
+        let grid = CardGrid(columns: 2, spacing: 10, aspectRatio: 0.5)
+        #expect(grid.frame(at: 0, inWidth: 210) == CGRect(x: 0, y: 0, width: 100, height: 200))
+        #expect(grid.frame(at: 1, inWidth: 210) == CGRect(x: 110, y: 0, width: 100, height: 200))
+        #expect(grid.frame(at: 4, inWidth: 210) == CGRect(x: 0, y: 420, width: 100, height: 200))
+        // A grid asked for no columns still lays out one.
+        #expect(CardGrid(columns: 0, spacing: 10, aspectRatio: 1).frame(at: 2, inWidth: 80) == CGRect(x: 0, y: 180, width: 80, height: 80))
+    }
+
     @Test func fullBoxGrowsARow() throws {
         let context = try memoryContext()
         let box = Box(name: "Test", columns: 2, rows: 1)

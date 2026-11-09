@@ -10,6 +10,7 @@ enum ViewMode: String {
 struct MainView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(SyncMonitor.self) private var sync
     @Environment(StoreHost.self) private var store
 
@@ -21,6 +22,8 @@ struct MainView: View {
     @State private var selectedBoxID: UUID?
     @State private var topBarHeight: CGFloat = 0
     @State private var bottomBarHeight: CGFloat = 0
+    @State private var windowSize: CGSize = .zero
+    @State private var bottomInset: CGFloat = 0
     @State private var focused: Watch?
     @State private var watchToRemove: Watch?
     @State private var afterDetailCloses: (() -> Void)?
@@ -72,9 +75,24 @@ struct MainView: View {
                         onReorder: { showBoxOrder = true }
                     )
                 }
+                .contentColumn()
             }
-            .fadingOverlay(.bottom, subtle: true, height: $bottomBarHeight) { addButton }
+            .fadingOverlay(.bottom, subtle: true, height: $bottomBarHeight) {
+                // Room for the add button to clear the last row.
+                Color.clear
+                    .frame(height: max(addButtonDiameter + Space.lg - bottomInset, 0))
+            }
+
+            // The same distance from the bottom and trailing edges of the
+            // window on every device, whatever its safe area.
+            addButton
+                .padding(Space.lg)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .ignoresSafeArea(.container, edges: [.bottom, .trailing])
         }
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { bottomInset = $0 }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { windowSize = $0 }
+        .environment(\.contentWidth, windowSize == .zero ? .infinity : Layout.contentWidth(in: windowSize))
         .confirmationDialog(
             "Are you sure you want to remove this watch?",
             isPresented: Binding(get: { watchToRemove != nil }, set: { if !$0 { watchToRemove = nil } }),
@@ -88,7 +106,7 @@ struct MainView: View {
                 .crownsSheet()
         }
         .sheet(item: $adding) { request in
-            AddFlowSheet(boxID: request.boxID) { _ in
+            AddFlowSheet(boxID: request.boxID, isRoomy: sizeClass == .regular) { _ in
                 adding = nil
             }
         }
@@ -165,6 +183,8 @@ struct MainView: View {
         .padding(.top, Space.xs)
     }
 
+    private let addButtonDiameter: CGFloat = 64
+
     private var addButton: some View {
         Button {
             guard let box = selectedBox else { return }
@@ -172,9 +192,8 @@ struct MainView: View {
         } label: {
             Image(systemName: "plus")
         }
-        .buttonStyle(.circle(.primary, diameter: 64))
+        .buttonStyle(.circle(.primary, diameter: addButtonDiameter))
         .accessibilityLabel("Add watch")
-        .padding(.bottom, Space.xs)
     }
 
     // MARK: - Boxes

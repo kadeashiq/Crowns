@@ -55,34 +55,23 @@ struct CircleButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        let pressed = configuration.isPressed
         configuration.label
             .font(.system(size: diameter * 0.36, weight: .semibold))
             .foregroundStyle(foreground)
             .frame(width: diameter, height: diameter)
-            .background {
-                if kind == .flat {
-                    Circle().fill(Theme.well)
-                } else {
-                    Circle()
-                        .fill(fill)
-                        .elevation(pressed || !isEnabled ? .flat : rest)
-                }
-            }
             .contentShape(.circle)
-            .scaleEffect(pressed ? 0.9 : 1)
-            .animation(Motion.press, value: pressed)
+            .glassEffect(glass, in: .circle)
     }
 
-    private var fill: Color {
-        guard isEnabled else { return Theme.hairline }
-        return kind == .primary ? Theme.ink : Theme.surface
+    /// The system's own Liquid Glass, which handles touch feedback itself.
+    private var glass: Glass {
+        kind == .primary && isEnabled ? .regular.tint(Theme.ink).interactive() : .regular.interactive()
     }
+
     private var foreground: Color {
         guard isEnabled else { return Theme.inkTertiary }
         return kind == .primary ? Theme.onInk : Theme.ink
     }
-    private var rest: Elevation { kind == .primary ? .high : .low }
 }
 
 /// A whole card as a button. The card comes down to the page under the finger.

@@ -9,6 +9,7 @@ struct BoxPage: View {
     let onMove: (Watch, Box) -> Void
     let onRemove: (Watch) -> Void
 
+    @Environment(\.modelContext) private var context
     @Query(sort: \Watch.addedAt) private var allWatches: [Watch]
     @Query(sort: [SortDescriptor(\Box.sortIndex), SortDescriptor(\Box.createdAt)]) private var boxes: [Box]
 
@@ -19,10 +20,16 @@ struct BoxPage: View {
     var body: some View {
         switch mode {
         case .box:
-            BoxCanvas(box: box, watches: watches, onOpen: onOpen, menu: menu)
+            BoxCanvas(box: box, watches: watches, onOpen: onOpen, onReorder: arrange)
         case .list:
             WatchListView(watches: watches, onOpen: onOpen, menu: menu)
         }
+    }
+
+    /// Keeps the order the cards were dragged into.
+    private func arrange(_ ordered: [Watch]) {
+        box.seat(ordered)
+        try? context.save()
     }
 
     @ViewBuilder
@@ -36,26 +43,35 @@ struct BoxPage: View {
     }
 }
 
-/// The grid: one raised card per watch.
-struct BoxCanvas<MenuContent: View>: View {
+/// The grid: one raised card per watch. Press and drag a card to move it;
+/// Move and Remove are on the watch's own screen.
+struct BoxCanvas: View {
     let box: Box
     let watches: [Watch]
     let onOpen: (Watch) -> Void
-    @ViewBuilder let menu: (Watch) -> MenuContent
+    let onReorder: ([Watch]) -> Void
+
+    @Environment(\.contentWidth) private var contentWidth
+    @State private var width: CGFloat = 0
+
+    private var metrics: GridMetrics { GridMetrics(columns: box.columns) }
 
     var body: some View {
         ScrollView(.vertical) {
-            WatchGrid(columns: box.columns, watches: watches) { watch in
-                WatchCell(watch: watch, columns: box.columns) {
+            WatchGrid(
+                columns: GridMetrics.columns(forWidth: min(width, contentWidth), preferred: box.columns),
+                metrics: metrics,
+                watches: watches,
+                onReorder: onReorder
+            ) { watch in
+                WatchCell(watch: watch, metrics: metrics) {
                     onOpen(watch)
                 }
-                .contextMenu { menu(watch) }
             }
-            .frame(maxWidth: 560)
-            .frame(maxWidth: .infinity)
             .padding(.horizontal, Space.md)
             .padding(.top, Space.xxs)
             .padding(.bottom, Space.md)
+            .contentColumn()
 
             if watches.isEmpty {
                 Text("Nothing here yet. Tap + to add a watch.")
@@ -64,6 +80,7 @@ struct BoxCanvas<MenuContent: View>: View {
             }
         }
         .scrollIndicators(.hidden)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 }
 
@@ -75,7 +92,8 @@ struct WatchListView<MenuContent: View>: View {
 
     var body: some View {
         ScrollView(.vertical) {
-            LazyVStack(spacing: Space.sm) {
+            // One column on a phone, more as the window widens.
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: Space.sm)], spacing: Space.sm) {
                 ForEach(watches) { watch in
                     Button {
                         onOpen(watch)
@@ -92,11 +110,10 @@ struct WatchListView<MenuContent: View>: View {
                         .padding(.top, Space.xxl)
                 }
             }
-            .frame(maxWidth: 560)
-            .frame(maxWidth: .infinity)
             .padding(.horizontal, Space.md)
             .padding(.top, Space.xxs)
             .padding(.bottom, Space.md)
+            .contentColumn()
         }
         .scrollIndicators(.hidden)
     }

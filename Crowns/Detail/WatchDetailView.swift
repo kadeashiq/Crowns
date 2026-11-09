@@ -16,7 +16,10 @@ struct WatchDetailView: View {
         ScrollView {
             VStack(spacing: Space.lg) {
                 WatchImage(watch: watch, size: .full)
-                    .frame(height: watch.coverData == nil ? 220 : 460)
+                    // Shorter on a short screen, so the name stays in view.
+                    .containerRelativeFrame(.vertical) { height, _ in
+                        min(watch.coverData == nil ? 220 : 460, height * 0.62)
+                    }
                     .accessibilityLabel(watch.displayName)
                 info
             }

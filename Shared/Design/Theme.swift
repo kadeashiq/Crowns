@@ -56,6 +56,20 @@ enum Radius {
     static let xl: CGFloat = 32
 }
 
+enum Layout {
+    /// How wide the main screen's content runs in a window of this size. A
+    /// large landscape window, such as an iPad on its side, keeps a margin
+    /// either side, so the content isn't stretched edge to edge.
+    static func contentWidth(in size: CGSize) -> CGFloat {
+        size.width >= 1000 && size.width > size.height ? (size.width * 0.7).rounded() : size.width
+    }
+}
+
+extension EnvironmentValues {
+    /// The widest the main screen's content runs. See `Layout.contentWidth`.
+    @Entry var contentWidth: CGFloat = .infinity
+}
+
 /// Text styles, all built on Dynamic Type.
 enum Typeface {
     static let display = Font.largeTitle.weight(.bold)

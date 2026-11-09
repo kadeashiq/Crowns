@@ -5,6 +5,9 @@ import SwiftData
 /// typing it in by hand. The form opens as its own sheet on top of this one.
 struct AddFlowSheet: View {
     let boxID: UUID?
+    /// A wide window shows this as a floating card, which wants more room
+    /// around and between things than a sheet at the foot of a phone.
+    var isRoomy = false
     let onDone: (String?) -> Void
 
     @Environment(\.modelContext) private var context
@@ -20,6 +23,7 @@ struct AddFlowSheet: View {
         chooser
             .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.height(detentHeight)])
             .presentationDragIndicator(.hidden)
+            .presentationSizing(.form.fitted(horizontal: false, vertical: true))
             .sheet(isPresented: isShowingForm) {
                 if let model {
                     NavigationStack {
@@ -46,8 +50,43 @@ struct AddFlowSheet: View {
     private var typedURL: URL? { ShareInputReader.firstLink(in: link) }
 
     private var chooser: some View {
-        VStack(spacing: Space.md) {
-            VStack(spacing: Space.xs) {
+        Group {
+            if isRoomy {
+                // A floating card fits itself to the background's height,
+                // with the content centred in it.
+                Color(.systemGroupedBackground)
+                    // Measured here, so it counts any inset the sheet adds.
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sheetHeight = $0 }
+                    .frame(idealHeight: contentHeight)
+                    .overlay { chooserContent }
+                    .ignoresSafeArea(.container)
+            } else {
+                chooserContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemGroupedBackground))
+                    // All edges: a device's side column is nowhere near this short sheet.
+                    .ignoresSafeArea(.container)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sheetHeight = $0 }
+            }
+        }
+        // Size the sheet from its real height until that matches the content.
+        .onChange(of: contentHeight - sheetHeight) { _, difference in
+            if abs(difference) > 0.5 { detentHeight += difference }
+        }
+        .alert("Extract from URL", isPresented: $isEnteringLink) {
+            TextField("Paste or type a URL", text: $link)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button("Cancel", role: .cancel) {}
+            Button("Extract", action: openTypedLink)
+                .disabled(typedURL == nil)
+        }
+    }
+
+    private var chooserContent: some View {
+        VStack(spacing: isRoomy ? Space.lg : Space.md) {
+            VStack(spacing: isRoomy ? Space.sm : Space.xs) {
                 Text("Add a watch")
                     .font(Typeface.title)
                     .foregroundStyle(Theme.ink)
@@ -57,7 +96,7 @@ struct AddFlowSheet: View {
                     .multilineTextAlignment(.center)
             }
 
-            VStack(spacing: 10) {
+            VStack(spacing: isRoomy ? Space.sm : 10) {
                 Button {
                     link = ""
                     isEnteringLink = true
@@ -76,29 +115,10 @@ struct AddFlowSheet: View {
                 .buttonStyle(.pill(.secondary, bordered: true))
             }
         }
-        .padding(Space.md)
+        .padding(isRoomy ? Space.xl : Space.md)
         // Its full height at any text size, for the sheet to grow to.
         .fixedSize(horizontal: false, vertical: true)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Centred in the whole sheet, so the gap above matches the gap below.
-        .background(Color(.systemGroupedBackground))
-        .ignoresSafeArea(.container, edges: .vertical)
-        // A detent doesn't count the sheet's bottom inset, so size it from
-        // the sheet's real height until that matches the buttons.
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sheetHeight = $0 }
-        .onChange(of: contentHeight - sheetHeight) { _, difference in
-            if abs(difference) > 0.5 { detentHeight += difference }
-        }
-        .alert("Extract from URL", isPresented: $isEnteringLink) {
-            TextField("Paste or type a URL", text: $link)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            Button("Cancel", role: .cancel) {}
-            Button("Extract", action: openTypedLink)
-                .disabled(typedURL == nil)
-        }
     }
 
     private func openTypedLink() {

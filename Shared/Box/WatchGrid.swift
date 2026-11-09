@@ -1,39 +1,61 @@
 import SwiftUI
 
-/// Sizes for a grid with a given number of columns.
+/// Sizes for a card, set by the number of columns its box asks for.
 struct GridMetrics {
     let columns: Int
 
     var showsCaption: Bool { columns <= 3 }
+    var showsDetailLine: Bool { columns <= 2 }
     var cardRadius: CGFloat { columns >= 3 ? Radius.md : Radius.lg }
     var captionInset: CGFloat { columns >= 3 ? Space.xs : Space.sm }
 
     /// Width over height for a whole cell, caption included.
     var aspectRatio: CGFloat {
         switch columns {
-        case ...1: 1.15
-        case 2: 0.78
-        case 3: 0.66
-        default: 0.8
+        case ...1: return 1.15
+        case 2: return 0.78
+        case 3: return 0.66
+        default: return 0.8
         }
+    }
+
+    /// The columns to lay out in a given width. A phone shows the box's own
+    /// count; anything wider adds columns, so cards stay about the same size.
+    static func columns(forWidth width: CGFloat, preferred: Int) -> Int {
+        let preferred = max(preferred, 1)
+        let phoneWidth: CGFloat = 402
+        return max(preferred, Int(width / (phoneWidth / CGFloat(preferred))))
     }
 }
 
-/// The box's watches, filled row by row from the top left.
+/// The box's watches as a grid of cards. On iOS 27 and later, press and drag
+/// a card to move it; the system runs the lift, the reflow and the drop.
 struct WatchGrid<Cell: View>: View {
+    /// The columns laid out, which can be more than the box asks for.
     let columns: Int
+    let metrics: GridMetrics
     let watches: [Watch]
+    /// Called with every watch in its new order once a card is dropped.
+    let onReorder: ([Watch]) -> Void
     @ViewBuilder var cell: (Watch) -> Cell
 
-    private var items: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: Space.sm), count: max(columns, 1))
+    private var grid: CardGrid {
+        CardGrid(columns: columns, spacing: Space.sm, aspectRatio: metrics.aspectRatio)
     }
 
     var body: some View {
-        LazyVGrid(columns: items, spacing: Space.sm) {
-            ForEach(watches) { watch in
-                cell(watch)
-                    .aspectRatio(GridMetrics(columns: columns).aspectRatio, contentMode: .fit)
+        if #available(iOS 27.0, *) {
+            grid {
+                ForEach(watches, content: cell).reorderable()
+            }
+            .reorderContainer(for: Watch.self, itemID: \.id) { change in
+                var anchor: UUID?
+                if case .before(let id) = change.destination.position { anchor = id }
+                onReorder(watches.placing(change.sources, before: anchor))
+            }
+        } else {
+            grid {
+                ForEach(watches, content: cell)
             }
         }
     }
@@ -42,10 +64,8 @@ struct WatchGrid<Cell: View>: View {
 /// A watch: its photo edge to edge on a raised card, with its name beneath.
 struct WatchCell: View {
     let watch: Watch
-    let columns: Int
+    let metrics: GridMetrics
     let onOpen: () -> Void
-
-    private var metrics: GridMetrics { GridMetrics(columns: columns) }
 
     var body: some View {
         Button(action: onOpen) {
@@ -64,7 +84,7 @@ struct WatchCell: View {
             Text(watch.brand.isEmpty ? watch.displayName : watch.brand)
                 .font(Typeface.micro)
                 .foregroundStyle(Theme.ink)
-            if columns <= 2, !detailLine.isEmpty {
+            if metrics.showsDetailLine, !detailLine.isEmpty {
                 Text(detailLine)
                     .font(.caption)
                     .foregroundStyle(Theme.inkSecondary)

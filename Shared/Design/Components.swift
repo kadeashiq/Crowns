@@ -177,7 +177,24 @@ private struct EdgeFade: View {
     }
 }
 
+/// Holds a view to the main screen's content width, centred.
+private struct ContentColumn: ViewModifier {
+    @Environment(\.contentWidth) private var width
+
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: width)
+            .frame(maxWidth: .infinity)
+    }
+}
+
 extension View {
+    /// Centres the view in the main screen's content column, which is
+    /// narrower than a large landscape window.
+    func contentColumn() -> some View {
+        modifier(ContentColumn())
+    }
+
     /// A `fadingBar` for content that manages its own scrolling, such as
     /// paged views, which clip to any safe area they're given. Reports its
     /// height so the content can leave room.

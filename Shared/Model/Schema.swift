@@ -139,6 +139,17 @@ extension CrownsSchemaV1.Box {
         for (index, watch) in ordered.enumerated() { watch.slot = index }
     }
 
+    /// Seats these watches in slots 0, 1, 2… in the order given, adding rows
+    /// if the box is too small. Only a watch whose slot changes is written,
+    /// so moving one card doesn't mark the whole box for syncing.
+    func seat(_ ordered: [Watch]) {
+        let rowsNeeded = (ordered.count + max(columns, 1) - 1) / max(columns, 1)
+        if rows < rowsNeeded { rows = rowsNeeded }
+        for (slot, watch) in ordered.enumerated() where watch.slot != slot {
+            watch.slot = slot
+        }
+    }
+
     /// The first free slot. A full box grows by one row rather than
     /// refusing the save, so saving from Safari never dead-ends.
     func claimFreeSlot() -> Int {
