@@ -232,3 +232,78 @@ struct SentenceSpecTests {
         #expect(read("Sapphire crystal thickness 1.6mm")["Thickness"] == nil)
     }
 }
+
+@Suite("Page suggestions")
+struct PageSuggestionTests {
+    @Test func twoCaseSizesAreLeftToChoose() {
+        let reading = SpecNormalizer.reading(from: SpecTable([]), title: "", text: "Available as a 38mm case or a 41mm case")
+        #expect(!reading.specs.contains { $0.label == "Case size" })
+        #expect(reading.suggestions["Case size"] == ["38 mm", "41 mm"])
+    }
+
+    @Test func oneSizeSaidTwiceIsCertain() {
+        let reading = SpecNormalizer.reading(from: SpecTable([]), title: "", text: "36mm case width\nThe 36mm case suits most wrists")
+        #expect(reading.specs.first { $0.label == "Case size" }?.value == "36 mm")
+        #expect(reading.suggestions.isEmpty)
+    }
+
+    @Test func preOwnedDetails() {
+        let specs = Dictionary(uniqueKeysWithValues: SpecNormalizer.specs(from: SpecTable([]), title: "", text: "Full set, year 2019, in excellent condition").map { ($0.label, $0.value) })
+        #expect(specs["Year"] == "2019")
+        #expect(specs["Condition"] == "Excellent")
+        #expect(specs["Box"] == "Yes")
+        #expect(specs["Papers"] == "Yes")
+    }
+
+    @Test func modelAnswersMustBeOnThePage() {
+        #expect(FoundationModelsFallback.isGrounded("IWC", in: "The IWC Portugieser"))
+        #expect(!FoundationModelsFallback.isGrounded("IWC", in: "The Portugieser"))
+        #expect(FoundationModelsFallback.statesAmount(12950, in: "Price £12,950.00"))
+        #expect(!FoundationModelsFallback.statesAmount(12950, in: "Price £1,295"))
+    }
+}
+
+@Suite("Image picking")
+struct ImagePickingTests {
+    private func draft(_ json: String) throws -> ListingDraft {
+        ListingInterpreter.interpret(try #require(PageSnapshot.decode(json)))
+    }
+
+    @Test func galleryPhotosComeFirstAndAlone() throws {
+        let d = try draft("""
+            {"url":"https://shop.example/watch.html","images":[
+              {"src":"https://shop.example/images/C60-ABC/1.jpg","w":0,"h":0,"g":true},
+              {"src":"https://shop.example/images/C60-ABC/2.jpg","w":0,"h":0,"g":true},
+              {"src":"https://shop.example/library/press/fratello.png","w":0,"h":0},
+              {"src":"https://shop.example/library/long/1_mob.jpg","w":1200,"h":800}
+            ]}
+            """)
+        #expect(d.imageURLs.map(\.lastPathComponent) == ["1.jpg", "2.jpg"])
+    }
+
+    @Test func aSecondSliderOfOtherPicturesIsLeftOut() throws {
+        let d = try draft("""
+            {"url":"https://shop.example/watch.html","images":[
+              {"src":"https://shop.example/images/C63-XYZ/1.jpg","w":0,"h":0,"g":true},
+              {"src":"https://shop.example/images/C63-XYZ/2.jpg","w":0,"h":0,"g":true},
+              {"src":"https://shop.example/library/long-description/slide1.webp","w":0,"h":0,"g":true}
+            ]}
+            """)
+        #expect(d.imageURLs.map(\.lastPathComponent) == ["1.jpg", "2.jpg"])
+    }
+
+    @Test func otherImagesNeedTheMainPhotosFolder() throws {
+        let d = try draft("""
+            {"url":"https://shop.example/watch.html","metaImages":["https://shop.example/images/C60-ABC/main.jpg"],"images":[
+              {"src":"https://shop.example/library/banner.jpg","w":1600,"h":900},
+              {"src":"https://shop.example/images/C60-ABC/side.jpg","w":800,"h":800}
+            ]}
+            """)
+        #expect(d.imageURLs.map(\.lastPathComponent) == ["main.jpg", "side.jpg"])
+    }
+
+    @Test func commerceCloudImagesAreAskedForLarge() {
+        let url = ImageURLNormalizer.normalize("https://shop.example/dw/image/v2/AB/on/demandware.static/x/1.jpg?sw=90&sh=90", relativeTo: nil)
+        #expect(url?.query() == "sw=1600")
+    }
+}

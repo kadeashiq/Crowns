@@ -90,6 +90,8 @@ struct WatchCell: View {
             .clipShape(.rect(cornerRadius: metrics.cardRadius, style: .continuous))
         }
         .buttonStyle(CardButtonStyle(radius: metrics.cardRadius))
+        // The lifted card keeps its rounded corners instead of a square backing.
+        .contentShape(.dragPreview, .rect(cornerRadius: metrics.cardRadius, style: .continuous))
         .accessibilityLabel(watch.displayName)
     }
 

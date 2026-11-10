@@ -65,6 +65,9 @@ final class AddWatchModel {
     var reference = ""
     var notes = ""
     var specs = EditableSpec.merging([])
+    /// Values the page gave for fields it wasn't clear about, keyed by field
+    /// or spec label. Never saved unless the user picks one.
+    var suggestions: [String: [String]] = [:]
     /// Pounds, as typed.
     var priceText = ""
     /// "$1,650 converted", or the original price when no rate was available.
@@ -81,17 +84,11 @@ final class AddWatchModel {
     /// The camera is up. The sheet behind it mustn't count as closed.
     var isTakingPhoto = false
     /// The slower readers are still going through the page.
-    private var isEnriching = false
 
     let isExtension: Bool
 
     @ObservationIgnored private var draft = ListingDraft()
-    /// What the readers had last reported, to tell new findings from old ones.
-    @ObservationIgnored private var lastFound = ListingDraft()
     @ObservationIgnored private var startTask: Task<Void, Never>?
-    @ObservationIgnored private var photoTask: Task<Void, Never>?
-    @ObservationIgnored private var enrichTask: Task<Void, Never>?
-    @ObservationIgnored private var priceTask: Task<Void, Never>?
     @ObservationIgnored private var finished = false
     @ObservationIgnored var hostView: UIView?
     private let context: ModelContext
@@ -108,12 +105,7 @@ final class AddWatchModel {
         loadBoxes(preferred: boxID)
     }
 
-    /// From a page, the first photo is enough: the rest are only alternatives.
-    var canSave: Bool {
-        guard stage == .ready else { return false }
-        if isManual { return !photosLoading && hasDetails }
-        return !photosLoading || !photos.isEmpty
-    }
+    var canSave: Bool { stage == .ready && !photosLoading && (!isManual || hasDetails) }
 
     private var hasDetails: Bool {
         !photos.isEmpty || !brand.trimmingCharacters(in: .whitespaces).isEmpty || !model.trimmingCharacters(in: .whitespaces).isEmpty
@@ -123,7 +115,6 @@ final class AddWatchModel {
     var loadingMessage: String? {
         if stage == .reading { return "Reading listing…" }
         if photosLoading { return "Getting photos…" }
-        if isEnriching, photos.isEmpty, brand.isEmpty, model.isEmpty { return "Reading listing…" }
         return nil
     }
 
@@ -185,6 +176,42 @@ final class AddWatchModel {
         specs.append(EditableSpec(label: label ?? "", value: "", isCustom: label == nil))
     }
 
+    /// What the page offers for a field, while the field is empty.
+    func suggestions(for field: String) -> [String] {
+        guard value(of: field).trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        return suggestions[field] ?? []
+    }
+
+    var hasSuggestions: Bool {
+        suggestions.keys.contains { !suggestions(for: $0).isEmpty }
+    }
+
+    /// Puts a value the page offered into its field.
+    func use(_ value: String, for field: String) {
+        Haptics.tick()
+        switch field {
+        case "Brand": brand = value
+        case "Model": model = value
+        case "Reference": reference = value
+        default:
+            if let index = specs.firstIndex(where: { $0.label == field }) {
+                specs[index].value = value
+            } else {
+                specs.append(EditableSpec(label: field, value: value))
+            }
+        }
+        suggestions[field] = nil
+    }
+
+    private func value(of field: String) -> String {
+        switch field {
+        case "Brand": brand
+        case "Model": model
+        case "Reference": reference
+        default: specs.first { $0.label == field }?.value ?? ""
+        }
+    }
+
     /// Fills in a suggestion. A brand on its own leaves any model typed so far.
     func apply(_ match: WatchCatalog.Match) {
         Haptics.tick()
@@ -203,87 +230,38 @@ final class AddWatchModel {
         }
         let reading = await ExtractionPipeline.read(snapshot: snapshot, url: url, host: hostView)
         guard !Task.isCancelled else { return }
-        draft = reading.draft
-        lastFound = reading.draft
+
+        // Photos and the slower readers run side by side, and the form shows
+        // everything at once when they're done, so nothing changes under
+        // someone already scrolling or typing.
+        let linkPreview = reading.needsLinkPreview ? reading.draft.sourceURL.map { link in
+            Task { await LinkPreviewFallback.fetch(link) }
+        } : nil
+        async let fetched = ImageFetcher.photos(from: reading.draft.imageURLs, referer: reading.draft.sourceURL)
+        let found = await ExtractionPipeline.enrich(reading, preview: await linkPreview?.value)
+        var loaded = await fetched
+        if loaded.isEmpty, let extra = await linkPreview?.value?.imageData,
+           let photo = await ImageFetcher.preparedPhoto(from: extra) {
+            loaded = [photo]
+        }
+        guard !Task.isCancelled else { return }
+
+        draft = found
         brand = draft.brand
         model = draft.model
         reference = draft.reference
         priceText = PriceFormatter.editingText(pence: draft.price?.pence)
-        specs = EditableSpec.merging(draft.specs)
-        stage = .ready
-        convertPrice()
-
-        let linkPreview = reading.needsLinkPreview ? reading.draft.sourceURL.map { link in
-            Task { await LinkPreviewFallback.fetch(link) }
-        } : nil
-        let urls = draft.imageURLs
-        let referer = draft.sourceURL
-        photoTask = Task {
-            await ImageFetcher.photos(from: urls, referer: referer) { [weak self] photo in
-                self?.add(photo)
-            }
-            if photos.isEmpty, let extra = await linkPreview?.value?.imageData,
-               let photo = await ImageFetcher.preparedPhoto(from: extra) {
-                add(photo)
-            }
-            photosLoading = false
-        }
-        isEnriching = true
-        enrichTask = Task {
-            await ExtractionPipeline.enrich(reading, preview: await linkPreview?.value) { [weak self] found in
-                self?.merge(found)
-            }
-            isEnriching = false
-        }
-    }
-
-    /// Photos only ever join the end, so the one in view never moves.
-    private func add(_ photo: ImageFetcher.Photo) {
-        photos.append(photo)
-        if visiblePhotoID == nil {
-            visiblePhotoID = photo.id
-        }
-    }
-
-    /// Takes what a slower reader found. The form is open by now, so only
-    /// new findings count, and they only go into fields that are still empty:
-    /// nothing typed is replaced and nothing cleared comes back.
-    func merge(_ found: ListingDraft) {
-        let before = lastFound
-        lastFound = found
-        if found.brand != before.brand, brand.isEmpty { brand = found.brand }
-        if found.model != before.model, model.isEmpty { model = found.model }
-        if found.reference != before.reference, reference.isEmpty { reference = found.reference }
-        for spec in found.specs where !before.specs.contains(spec) {
-            if let index = specs.firstIndex(where: { $0.label == spec.label }) {
-                if specs[index].value.isEmpty { specs[index].value = spec.value }
-            } else {
-                specs.append(EditableSpec(label: spec.label, value: spec.value))
-            }
-        }
-        if draft.price == nil, let price = found.price {
-            draft.price = price
-            if priceText.isEmpty { priceText = PriceFormatter.editingText(pence: price.pence) }
-            convertPrice()
-        }
-    }
-
-    /// Prices are always pounds. A foreign one stays out of the field until
-    /// it has been converted, so nothing but pounds is ever shown as pounds.
-    private func convertPrice() {
         priceNote = draft.priceNote
-        guard let price = draft.price, !price.isGBP else { return }
-        priceNote = ""
-        priceTask = Task {
-            let converted = await CurrencyConverter.toGBP(price)
-            guard !Task.isCancelled else { return }
-            if let converted {
-                draft.originalPrice = price
-                draft.price = converted
-                if priceText.isEmpty { priceText = PriceFormatter.editingText(pence: converted.pence) }
-            }
-            priceNote = draft.priceNote
+        specs = EditableSpec.merging(draft.specs)
+        // A spec the page offered values for gets a row to show them under.
+        for label in SpecNormalizer.labels where draft.suggestions[label] != nil && !specs.contains(where: { $0.label == label }) {
+            specs.append(EditableSpec(label: label, value: ""))
         }
+        suggestions = draft.suggestions
+        photos = loaded
+        visiblePhotoID = loaded.first?.id
+        photosLoading = false
+        stage = .ready
     }
 
     // MARK: - Saving
@@ -316,10 +294,6 @@ final class AddWatchModel {
     private func commit() async {
         guard let boxID = selectedBoxID else { return }
         stage = .saving
-        // What's on screen is what gets saved, so stop looking for more.
-        photoTask?.cancel()
-        enrichTask?.cancel()
-        await priceTask?.value
         let chosen = photos.first { $0.id == visiblePhotoID } ?? photos.first
         let cover = await CoverImages.encoding(chosen?.data)
         let edited = editedDraft()
@@ -351,12 +325,7 @@ final class AddWatchModel {
 
     /// Stops any work in progress and leaves the sheet as it is.
     func stop() {
-        // A save in progress is still waiting on its price.
-        guard stage != .saving else { return }
         startTask?.cancel()
-        photoTask?.cancel()
-        enrichTask?.cancel()
-        priceTask?.cancel()
     }
 
     private func finish(_ message: String?) {

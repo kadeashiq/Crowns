@@ -31,8 +31,16 @@ enum ListingInterpreter {
         d.model = model(table: table, product: product, name: name, h1: s.h1, brand: d.brand, reference: d.reference)
         d.price = price(product: product, shopify: shopify, micro: micro, meta: meta, priceTexts: s.priceTexts ?? [], s: s)
         d.summary = String((first(product?["description"]?.string, shopify?["description"]?.string, meta["og:description"], meta["description"]) ?? "").prefix(600))
-        d.specs = SpecNormalizer.specs(from: table, title: name, text: ((s.specLines ?? []) + [d.summary]).joined(separator: "\n"))
-        d.imageURLs = images(product: product, shopify: shopify, s: s)
+        let specs = SpecNormalizer.reading(from: table, title: name, text: ([name] + (s.specLines ?? []) + [d.summary]).joined(separator: "\n"))
+        d.specs = specs.specs
+        for (label, values) in specs.suggestions {
+            for value in values { d.suggest(value, for: label) }
+        }
+        // A reference-shaped code in the page text that nothing labels as one.
+        if d.reference.isEmpty, let text = s.text, let code = ReferenceDetector.best(in: String(text.prefix(1200))), ReferenceDetector.score(code) >= 3 {
+            d.suggest(code, for: "Reference")
+        }
+        d.imageURLs = images(product: product, shopify: shopify, s: s, reference: d.reference)
 
         if product != nil { d.sources.insert(.jsonLD) }
         if shopify != nil { d.sources.insert(.shopify) }
@@ -173,19 +181,47 @@ enum ListingInterpreter {
         m.amount >= 1 && m.amount < 100_000_000 && m.currency.count == 3
     }
 
-    private static func images(product: JSONValue?, shopify: JSONValue?, s: PageSnapshot) -> [URL] {
-        var raws: [String] = []
+    /// The product's own photos. A shop's product data is trusted when it
+    /// lists several. Otherwise the page's gallery, and other large images
+    /// only if they share the main photo's folder or name the reference.
+    private static func images(product: JSONValue?, shopify: JSONValue?, s: PageSnapshot, reference: String) -> [URL] {
         func urls(from value: JSONValue?) -> [String] {
             (value?.list ?? []).compactMap { item in
                 if item.isObject { return item["url"]?.string ?? item["contentUrl"]?.string }
                 return item.string
             }
         }
-        raws += urls(from: product?["image"])
-        raws += urls(from: shopify?["images"])
-        raws += s.metaImages ?? []
-        raws += (s.images ?? []).filter { ($0.w ?? 0) == 0 || ($0.w ?? 0) >= 300 }.map(\.src)
-        return ImageURLNormalizer.unique(raws, base: s.pageURL)
+        let listed = urls(from: product?["image"]) + urls(from: shopify?["images"])
+        let fromData = ImageURLNormalizer.unique(listed, base: s.pageURL)
+        if fromData.count >= 2 { return fromData }
+
+        let all = s.images ?? []
+        let gallery = all.filter { $0.g == true }.map(\.src)
+        let found = ImageURLNormalizer.unique(listed + (s.metaImages ?? []) + gallery, base: s.pageURL)
+        if found.count >= 2 {
+            // A page can have more than one slider. The product's own photos
+            // share a folder with its first gallery photo.
+            let first = ImageURLNormalizer.unique(gallery, base: s.pageURL).first ?? found[0]
+            let same = found.filter { isSameProduct($0, as: first, reference: reference) }
+            return same.count >= 2 ? same : found
+        }
+
+        let others = ImageURLNormalizer.unique(all.filter { $0.g != true && (($0.w ?? 0) == 0 || ($0.w ?? 0) >= 300) }.map(\.src), base: s.pageURL)
+        guard let main = found.first ?? others.first else { return [] }
+        let related = others.filter { isSameProduct($0, as: main, reference: reference) }
+        // A page with no folder or name to go by keeps what it has.
+        let extra = related.isEmpty ? others : related
+        return ImageURLNormalizer.unique((found + extra).map(\.absoluteString), base: nil)
+    }
+
+    /// Photos of one product usually share a folder, or carry its reference.
+    private static func isSameProduct(_ url: URL, as main: URL, reference: String) -> Bool {
+        let path = url.path().lowercased()
+        let folder = (path as NSString).deletingLastPathComponent
+        let mainFolder = (main.path().lowercased() as NSString).deletingLastPathComponent
+        if folder.split(separator: "/").count >= 2, folder == mainFolder { return true }
+        let code = reference.lowercased()
+        return code.count >= 5 && path.contains(code)
     }
 
     // MARK: - Helpers

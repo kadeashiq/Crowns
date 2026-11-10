@@ -69,7 +69,6 @@ struct AddWatchForm: View {
             if let photoActions {
                 Section { photoActions }
             }
-            boxSection
             detailsSection
             specsSection
             Section {
@@ -176,41 +175,50 @@ struct AddWatchForm: View {
 
     // MARK: - Fields
 
-    private var boxSection: some View {
-        Section {
-            ScrollView(.horizontal) {
-                HStack(spacing: Space.xs) {
-                    ForEach(model.boxes) { box in
-                        ChipButton(title: box.name, selected: box.id == model.selectedBoxID) {
-                            Haptics.tick()
-                            model.selectedBoxID = box.id
-                        }
-                        // Keeps the next chip's shadow off the selected one.
-                        .zIndex(box.id == model.selectedBoxID ? 1 : 0)
+    /// The boxes to save into. A section header rather than a row of its own:
+    /// a form row cuts off the chips' shadows at its edges.
+    private var boxPicker: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: Space.xs) {
+                ForEach(model.boxes) { box in
+                    ChipButton(title: box.name, selected: box.id == model.selectedBoxID) {
+                        Haptics.tick()
+                        model.selectedBoxID = box.id
                     }
+                    // Keeps the next chip's shadow off the selected one.
+                    .zIndex(box.id == model.selectedBoxID ? 1 : 0)
                 }
             }
-            .scrollIndicators(.hidden)
-            .scrollClipDisabled()
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
         }
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled()
+        .textCase(nil)
+        // The same gap above as below, where the next card starts.
+        .listRowInsets(EdgeInsets(top: Space.xs - 2, leading: 0, bottom: Space.sm, trailing: 0))
     }
 
     private var detailsSection: some View {
         Section {
-            row("Brand", placeholder: "Add brand", text: $model.brand, focus: .brand, next: .model)
-                .autocorrectionDisabled()
-            typingSuggestions(for: .brand)
-            row("Model", placeholder: "Add model", text: $model.model, focus: .model, next: .reference)
-                .autocorrectionDisabled()
-            typingSuggestions(for: .model)
-            row("Reference", placeholder: "Optional", text: $model.reference, focus: .reference, next: .price)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.characters)
-            row("Price (£)", placeholder: "Optional", text: $model.priceText, focus: .price)
-                .keyboardType(.decimalPad)
-                .accessibilityLabel("Price")
+            Group {
+                row("Brand", placeholder: "Add brand", text: $model.brand, focus: .brand, next: .model)
+                    .autocorrectionDisabled()
+                typingSuggestions(for: .brand)
+                pageSuggestions(for: "Brand", unless: .brand)
+                row("Model", placeholder: "Add model", text: $model.model, focus: .model, next: .reference)
+                    .autocorrectionDisabled()
+                typingSuggestions(for: .model)
+                pageSuggestions(for: "Model", unless: .model)
+                row("Reference", placeholder: "Optional", text: $model.reference, focus: .reference, next: .price)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.characters)
+                pageSuggestions(for: "Reference", unless: .reference)
+                row("Price (£)", placeholder: "Optional", text: $model.priceText, focus: .price)
+                    .keyboardType(.decimalPad)
+                    .accessibilityLabel("Price")
+            }
+            .disabled(model.stage == .reading)
+        } header: {
+            boxPicker
         } footer: {
             if !model.errorText.isEmpty {
                 Text(model.errorText)
@@ -219,13 +227,15 @@ struct AddWatchForm: View {
             }
         }
         .textInputAutocapitalization(.words)
-        .disabled(model.stage == .reading)
     }
 
     private var specsSection: some View {
-        Section("Specs") {
+        Section {
             ForEach($model.specs) { $spec in
                 specRow($spec)
+                if !spec.isCustom {
+                    pageSuggestions(for: spec.label, unless: .spec(spec.id))
+                }
             }
             Menu {
                 ForEach(model.unusedSpecLabels, id: \.self) { label in
@@ -237,6 +247,12 @@ struct AddWatchForm: View {
                 Label("Add spec", systemImage: "plus")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(.rect)
+            }
+        } header: {
+            Text("Specs")
+        } footer: {
+            if model.hasSuggestions {
+                Text("Found on the page, but not for certain. Nothing is saved unless you tap it.")
             }
         }
         .textInputAutocapitalization(.sentences)
@@ -312,6 +328,32 @@ struct AddWatchForm: View {
             }
             .scrollIndicators(.hidden)
             .id(Self.typingSuggestionsID)
+        }
+    }
+
+    /// Values the page gave for an empty field it wasn't clear about. Out of
+    /// the way while the field is being typed in.
+    @ViewBuilder
+    private func pageSuggestions(for field: String, unless typing: Field) -> some View {
+        let values = focus == typing ? [] : model.suggestions(for: field)
+        if !values.isEmpty {
+            HStack(spacing: Space.xs) {
+                Text("From the page")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                ScrollView(.horizontal) {
+                    HStack(spacing: Space.xs) {
+                        ForEach(values, id: \.self) { value in
+                            ChipButton(title: value, flat: true) {
+                                model.use(value, for: field)
+                            }
+                            .accessibilityLabel("Use \(value) for \(field)")
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
         }
     }
 

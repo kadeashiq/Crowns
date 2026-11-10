@@ -27,6 +27,8 @@ struct PageSnapshot: Codable, Hashable {
         var w: Int?
         var h: Int?
         var alt: String?
+        /// In the product's own gallery.
+        var g: Bool?
     }
 
     static func decode(_ json: String) -> PageSnapshot? {

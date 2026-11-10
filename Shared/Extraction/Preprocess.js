@@ -216,6 +216,22 @@ var CrownsExtractor = (function () {
       var cells = rows[k].querySelectorAll("th, td");
       if (cells.length === 2) add(cells[0].textContent, cells[1].textContent);
     }
+    // Options chosen on the page, such as the strap.
+    var selects = document.querySelectorAll("select");
+    for (var s = 0; s < selects.length && s < 20; s++) {
+      var select = selects[s];
+      var option = select.options[select.selectedIndex];
+      var name = (select.labels && select.labels[0] && select.labels[0].textContent) || select.getAttribute("aria-label") || "";
+      if (option && option.value && SPEC_WORD.test(name) && !inChrome(select)) add(name, option.textContent);
+    }
+    var radios = document.querySelectorAll("input[type=radio]:checked");
+    for (var r = 0; r < radios.length && r < 20; r++) {
+      var radio = radios[r];
+      var legend = radio.closest("fieldset") && radio.closest("fieldset").querySelector("legend");
+      var group = legend ? legend.textContent : "";
+      var choice = (radio.labels && radio.labels[0] && radio.labels[0].textContent) || radio.value;
+      if (SPEC_WORD.test(group) && !inChrome(radio)) add(group, choice);
+    }
     // Any other markup: a label beside its value, or "Label: value".
     var nodes = document.querySelectorAll("li, p, div, span, strong, b, h2, h3, h4, h5, h6, label");
     for (var n = 0; n < nodes.length && n < 8000; n++) {
@@ -281,6 +297,8 @@ var CrownsExtractor = (function () {
       }
       for (var i = 0; i < nodes.length && out.length < 12; i++) {
         var el = nodes[i];
+        // A crossed-out price is what it used to cost.
+        if (el.closest("s, del, strike, [class*='compare' i], [class*='was-price' i], [class*='old-price' i], [class*='line-through' i]")) continue;
         var t = clean(el.getAttribute("content") || el.textContent);
         if (!t || t.length > 60 || !/\d/.test(t)) continue;
         if (!CURRENCY_HINT.test(t) && !el.getAttribute("content")) continue;
@@ -291,11 +309,50 @@ var CrownsExtractor = (function () {
   }
 
   var JUNK_IMAGE = /(logo|icon|sprite|badge|avatar|flag|payment|placeholder|spinner|loader|pixel|tracking|1x1|blank\.)/i;
+  // Parts of a product page that show other things: other products, press,
+  // reviews, pop-ups, colour choices.
+  var NOT_PRODUCT = /(recommend|related|upsell|cross-?sell|also-?like|you-?may|recently|similar|complete-the-look|product-?tile|product-?card|press|review|testimonial|instagram|swatch|payment|newsletter|modal|popup)/i;
+  // The product's own photos.
+  var GALLERY = /(gallery|carousel|slider|swiper|slick|zoom|product-?media|product__media|product-?image|product-?photo|pdp-?image|primary-image|thumbnails?)/i;
+  var IMAGE_FILE = /\.(jpe?g|png|webp|avif|heic)(\?|#|$)/i;
 
+  // "gallery", "page", or "skip" for an image, from the blocks it sits in.
+  function region(img) {
+    var gallery = false;
+    var el = img.parentElement;
+    for (var depth = 0; el && el !== document.body && depth < 14; depth++, el = el.parentElement) {
+      var tag = el.tagName;
+      if (tag === "NAV" || tag === "DIALOG") return "skip";
+      // The site's header and footer, not a product header inside the page.
+      if ((tag === "HEADER" || tag === "FOOTER") && !el.closest("main, article")) return "skip";
+      if (el.getAttribute("role") === "dialog" || el.getAttribute("aria-modal") === "true") return "skip";
+      var name = (typeof el.className === "string" ? el.className : "") + " " + (el.id || "");
+      if (NOT_PRODUCT.test(name)) return "skip";
+      if (GALLERY.test(name)) gallery = true;
+    }
+    return gallery ? "gallery" : "page";
+  }
+
+  // The full-size image a thumbnail links to, "" for a plain image, or null
+  // when it links to another page (another product, an article).
+  function linkedImage(img) {
+    var a = img.closest("a[href]");
+    if (!a) return "";
+    var href = a.getAttribute("href") || "";
+    if (!href || href.charAt(0) === "#" || /^javascript:/i.test(href)) return "";
+    var abs = absolute(href);
+    if (!abs) return "";
+    if (IMAGE_FILE.test(abs) || /\/dw\/image\//.test(abs)) return abs;
+    return abs.split("#")[0] === document.URL.split("#")[0] ? "" : null;
+  }
+
+  // The product's photos first, in the order the page shows them, then any
+  // other large images, biggest first.
   function images() {
     var found = {};
-    var list = [];
-    function add(src, w, h, alt) {
+    var gallery = [];
+    var rest = [];
+    function add(src, w, h, alt, inGallery) {
       var abs = absolute(src);
       if (!abs || /\.svg(\?|$)/i.test(abs) || JUNK_IMAGE.test(abs)) return;
       if (w && h && (w < 200 || h < 200)) return;
@@ -306,26 +363,37 @@ var CrownsExtractor = (function () {
         return;
       }
       var item = { src: abs, w: w || 0, h: h || 0, alt: clean(alt).slice(0, 120) };
+      if (inGallery) item.g = true;
       found[abs] = item;
-      list.push(item);
+      (inGallery ? gallery : rest).push(item);
     }
     var imgs = document.querySelectorAll("img");
     for (var i = 0; i < imgs.length && i < 600; i++) {
       var img = imgs[i];
+      var where = region(img);
+      var linked = linkedImage(img);
+      if (where === "skip" || linked === null) continue;
       var w = img.naturalWidth || parseInt(img.getAttribute("width"), 10) || 0;
       var h = img.naturalHeight || parseInt(img.getAttribute("height"), 10) || 0;
       var alt = img.getAttribute("alt") || "";
       var zoom = img.getAttribute("data-zoom-src") || img.getAttribute("data-zoom-image") || img.getAttribute("data-zoom") || img.getAttribute("data-large_image");
       var srcset = bestFromSrcset(img.getAttribute("srcset") || img.getAttribute("data-srcset"));
-      var src = zoom || srcset || img.getAttribute("data-src") || img.currentSrc || img.getAttribute("src");
-      add(src, w, h, alt);
+      var src = zoom || linked || srcset || img.getAttribute("data-src") || img.currentSrc || img.getAttribute("src");
+      // A thumbnail that opens a larger image stands for that image, whatever its own size.
+      if (zoom || linked) {
+        w = 0;
+        h = 0;
+      }
+      add(src, w, h, alt, where === "gallery");
     }
     var sources = document.querySelectorAll("picture source[srcset]");
-    for (var j = 0; j < sources.length && j < 200; j++) add(bestFromSrcset(sources[j].getAttribute("srcset")), 0, 0, "");
-    list.sort(function (a, b) {
+    for (var j = 0; j < sources.length && j < 200; j++) {
+      if (region(sources[j]) !== "skip") add(bestFromSrcset(sources[j].getAttribute("srcset")), 0, 0, "", false);
+    }
+    rest.sort(function (a, b) {
       return b.w * b.h - a.w * a.h;
     });
-    return list.slice(0, MAX_IMAGES);
+    return gallery.concat(rest).slice(0, MAX_IMAGES);
   }
 
   function pageText() {

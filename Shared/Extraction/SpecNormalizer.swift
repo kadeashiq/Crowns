@@ -68,6 +68,12 @@ enum SpecNormalizer {
     /// Every spec the app knows by name, in the usual order.
     static var labels: [String] { canon.map(\.label) }
 
+    /// The usual name for a label, such as "Case size" for "Case diameter".
+    static func label(for raw: String) -> String {
+        let key = SpecTable.key(raw)
+        return canon.first { $0.keys.contains(key) }?.label ?? raw
+    }
+
     /// Puts specs from any source into the usual order.
     static func ordered(_ specs: [Spec]) -> [Spec] {
         let rank = Dictionary(uniqueKeysWithValues: canon.enumerated().map { ($1.label, $0) })
@@ -77,7 +83,14 @@ enum SpecNormalizer {
     }
 
     static func specs(from table: SpecTable, title: String, text: String = "") -> [Spec] {
+        reading(from: table, title: title, text: text).specs
+    }
+
+    /// The specs, and the values found for any the page wasn't clear about:
+    /// a measurement stated two different ways is left for the user to pick.
+    static func reading(from table: SpecTable, title: String, text: String = "") -> (specs: [Spec], suggestions: [String: [String]]) {
         var out: [Spec] = []
+        var unsure: [String: [String]] = [:]
         for (label, keys) in canon {
             var value: String?
             for key in keys {
@@ -95,12 +108,28 @@ enum SpecNormalizer {
             out.append(Spec(label: label, value: v))
         }
         for (label, patterns, format) in sentencePatterns where !out.contains(where: { $0.label == label }) {
-            if let found = firstCapture(patterns, in: text) { out.append(Spec(label: label, value: format(found))) }
+            var values: [String] = []
+            for found in captures(patterns, in: text) {
+                let value = format(found)
+                if !values.contains(where: { sameMeasure($0, value) }) { values.append(value) }
+            }
+            if values.count == 1 {
+                out.append(Spec(label: label, value: values[0]))
+            } else if values.count > 1 {
+                unsure[label] = Array(values.prefix(3))
+            }
         }
-        if !out.contains(where: { $0.label == "Case size" }), let size = caseSize(in: title) {
+        if !out.contains(where: { $0.label == "Case size" }), unsure["Case size"] == nil, let size = caseSize(in: title) {
             out.append(Spec(label: "Case size", value: size))
         }
-        return ordered(out)
+        return (ordered(out), unsure)
+    }
+
+    /// "100 meters" and "100m" say the same thing.
+    private static func sameMeasure(_ a: String, _ b: String) -> Bool {
+        func number(_ s: String) -> String { String(s.prefix { $0.isNumber || $0 == "." || $0 == " " }).filter { $0 != " " } }
+        let (x, y) = (number(a), number(b))
+        return x.isEmpty || y.isEmpty ? a.caseInsensitiveCompare(b) == .orderedSame : x == y
     }
 
     /// Between a label and its number: words that would mean the number
@@ -119,16 +148,23 @@ enum SpecNormalizer {
         ], { "\($0) mm" }),
         ("Water resistance", [#"water[- ]?resist\w*[^.\n\d]{0,24}(\d+\s?(?:m|metres|meters|atm|bar)\b)"#, #"(\d+\s?(?:m|metres|meters|atm|bar))\s+water[- ]?resist"#], { $0 }),
         ("Power reserve", [#"power reserve[^.\n\d]{0,24}(\d+)\s?h"#, #"(\d+)[- ]?hours?[^.\n]{0,20}power reserve"#], { "\($0) hours" }),
+        // Pre-owned listings.
+        ("Year", [#"\b(?:year|circa|dated)\s*:?\s*((?:19[3-9]|20[0-3])\d)\b"#], { $0 }),
+        ("Condition", [#"\b(unworn|brand new|new old stock|mint|excellent|very good|good|fair)\s+condition\b"#], { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }),
+        ("Box", [#"\b(box (?:and|&) papers|full set|with (?:the )?(?:original )?box)\b"#], { _ in "Yes" }),
+        ("Papers", [#"\b(box (?:and|&) papers|full set|with (?:the )?(?:original )?papers)\b"#], { _ in "Yes" }),
     ]
 
-    private static func firstCapture(_ patterns: [String], in text: String) -> String? {
+    /// Every match of the patterns, in order.
+    private static func captures(_ patterns: [String], in text: String) -> [String] {
+        var out: [String] = []
         for pattern in patterns {
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-                  let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-                  let range = Range(match.range(at: 1), in: text) else { continue }
-            return String(text[range])
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }
+            for match in regex.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+                if let range = Range(match.range(at: 1), in: text) { out.append(String(text[range])) }
+            }
         }
-        return nil
+        return out
     }
 
     /// "41mm" or "41 mm" in a title → "41 mm".

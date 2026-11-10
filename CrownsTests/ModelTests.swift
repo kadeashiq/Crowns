@@ -221,37 +221,19 @@ struct ModelTests {
         #expect(context.changedModelsArray.count == 1)
     }
 
-    @Test func clearedFieldsStayClearWhenTheReadersReportAgain() throws {
+    @Test func aValueFromThePageFillsItsFieldWhenPicked() throws {
         let context = try memoryContext()
         let model = AddWatchModel(context: context, isExtension: false) { _ in }
-        var found = ListingDraft()
-        found.brand = "Omega"
-        found.specs = [Spec(label: "Dial", value: "Blue")]
-        model.merge(found)
-        #expect(model.brand == "Omega")
-        #expect(model.specs.first { $0.label == "Dial" }?.value == "Blue")
+        model.suggestions = ["Case size": ["38 mm", "41 mm"], "Model": ["Black Bay"]]
+        #expect(model.suggestions(for: "Case size") == ["38 mm", "41 mm"])
+        model.model = "Pelagos"
+        #expect(model.suggestions(for: "Model").isEmpty)
 
-        model.brand = ""
-        if let dial = model.specs.firstIndex(where: { $0.label == "Dial" }) { model.specs[dial].value = "" }
-        found.model = "Seamaster"
-        model.merge(found)
+        model.use("41 mm", for: "Case size")
 
-        #expect(model.brand.isEmpty)
-        #expect(model.specs.first { $0.label == "Dial" }?.value.isEmpty == true)
-        #expect(model.model == "Seamaster")
-    }
-
-    @Test func photosCanBeSavedOnceTheFirstHasArrived() throws {
-        let context = try memoryContext()
-        let model = AddWatchModel(context: context, isExtension: false) { _ in }
-        model.stage = .ready
-        #expect(!model.canSave)
-        let image = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600)).jpegData(withCompressionQuality: 0.9) { ctx in
-            UIColor.red.setFill()
-            ctx.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
-        }
-        model.photos = [try #require(ImageFetcher.photo(from: image))]
-        #expect(model.canSave)
+        #expect(model.specs.first { $0.label == "Case size" }?.value == "41 mm")
+        #expect(model.suggestions(for: "Case size").isEmpty)
+        #expect(model.hasSuggestions == false)
     }
 
     @Test func savingKeepsWhatWasTyped() async throws {

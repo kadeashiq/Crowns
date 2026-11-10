@@ -34,13 +34,13 @@ enum ImageFetcher {
         return URLSession(configuration: config)
     }()
 
-    /// Fetches up to `limit` usable photos and hands them over in the order
-    /// given, for as long as `patience` lasts. After that, one slow photo no
-    /// longer holds up the rest, which arrive as they come.
-    static func photos(from urls: [URL], referer: URL?, limit: Int = 8, patience: Duration = .seconds(3), deliver: @escaping @MainActor @Sendable (Photo) -> Void) async {
+    /// Fetches up to `limit` usable photos, in the order given. Once
+    /// `patience` has run out and there is at least one, slow ones are left
+    /// behind rather than holding up the rest.
+    static func photos(from urls: [URL], referer: URL?, limit: Int = 8, patience: Duration = .seconds(4)) async -> [Photo] {
         let candidates = Array(urls.prefix(limit + 4))
-        guard !candidates.isEmpty else { return }
-        await withTaskGroup(of: (Int, Photo?).self) { group in
+        guard !candidates.isEmpty else { return [] }
+        return await withTaskGroup(of: (Int, Photo?).self) { group in
             for (index, url) in candidates.enumerated() {
                 group.addTask { (index, await photo(from: url, referer: referer)) }
             }
@@ -48,36 +48,22 @@ enum ImageFetcher {
                 try? await Task.sleep(for: patience)
                 return (-1, nil)
             }
-            var waiting: [Int: Photo?] = [:]
-            var next = 0
+            var found: [Int: Photo] = [:]
             var settled = 0
-            var delivered = 0
-            var inOrder = true
+            var outOfPatience = false
             for await (index, photo) in group {
                 if index < 0 {
-                    inOrder = false
+                    outOfPatience = true
                 } else {
                     settled += 1
-                    waiting[index] = .some(photo)
+                    found[index] = photo
                 }
-                var ready: [Photo] = []
-                while let result = waiting.removeValue(forKey: next) {
-                    next += 1
-                    if let result { ready.append(result) }
+                if settled == candidates.count || (outOfPatience && !found.isEmpty) {
+                    group.cancelAll()
+                    break
                 }
-                if !inOrder {
-                    ready += waiting.keys.sorted().compactMap { waiting.removeValue(forKey: $0) ?? nil }
-                }
-                for photo in ready {
-                    await deliver(photo)
-                    delivered += 1
-                    if delivered == limit {
-                        group.cancelAll()
-                        return
-                    }
-                }
-                if settled == candidates.count { group.cancelAll() }
             }
+            return found.sorted { $0.key < $1.key }.prefix(limit).map(\.value)
         }
     }
 

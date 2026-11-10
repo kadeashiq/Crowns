@@ -4,8 +4,10 @@ import FoundationModels
 #endif
 
 /// Last resort for pages with no structured data: Apple's on-device model
-/// reads the page text and fills in what the heuristics missed. It only ever
-/// fills empty fields; anything found earlier wins.
+/// reads the page text for what the heuristics missed. Its answers are only
+/// offered as suggestions, and only when they appear on the page word for
+/// word; anything found earlier wins. A price is the exception: one stated on
+/// the page fills the empty price.
 enum FoundationModelsFallback {
     /// Loads the model ahead of the first question.
     static func prewarm() {
@@ -18,23 +20,23 @@ enum FoundationModelsFallback {
     static func fill(_ draft: inout ListingDraft, title: String, text: String) async {
         #if canImport(FoundationModels)
         guard let guess = await guess(title: title, text: text) else { return }
-        apply(guess, to: &draft)
+        apply(guess, to: &draft, page: title + "\n" + text)
         #endif
     }
 
-    /// Fills specs the page reading missed. Free and on-device, on iPhones
+    /// Suggests specs the page reading missed. Free and on-device, on iPhones
     /// with Apple Intelligence; other devices simply skip this step.
     static func fillSpecs(_ draft: inout ListingDraft, text: String) async {
         #if canImport(FoundationModels)
         guard let guess = await specsGuess(text: text) else { return }
-        let added = guess.fields.compactMap { label, value -> Spec? in
+        var used = false
+        for (label, value) in guess.fields {
             let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !draft.specs.contains(where: { $0.label == label }), isGrounded(value, in: text) else { return nil }
-            return Spec(label: label, value: value)
+            guard !draft.specs.contains(where: { $0.label == label }), isGrounded(value, in: text) else { continue }
+            draft.suggest(value, for: label)
+            used = true
         }
-        guard !added.isEmpty else { return }
-        draft.specs = SpecNormalizer.ordered(draft.specs + added)
-        draft.sources.insert(.foundationModels)
+        if used { draft.sources.insert(.foundationModels) }
         #endif
     }
 
@@ -46,7 +48,16 @@ enum FoundationModelsFallback {
         let words = value.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "." })
             .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ".")) }
         let checked = words.filter { $0.contains(where: \.isNumber) || $0.count >= 4 }
-        return !checked.isEmpty && checked.allSatisfy { source.contains($0) }
+        // Short names such as IWC have no long word to check, so the whole name must appear.
+        if checked.isEmpty { return words.count == 1 && source.contains(value.lowercased()) }
+        return checked.allSatisfy { source.contains($0) }
+    }
+
+    /// True if the page states this amount, written with or without separators.
+    static func statesAmount(_ amount: Double, in text: String) -> Bool {
+        let whole = String(Int(amount.rounded()))
+        let joined = text.replacingOccurrences(of: #"(?<=\d)[,.'’   ](?=\d{3}\b)"#, with: "", options: .regularExpression)
+        return joined.range(of: #"(?<![\d])"# + whole + #"(?![\d])"#, options: .regularExpression) != nil
     }
 }
 
@@ -135,37 +146,35 @@ extension FoundationModelsFallback {
         }
     }
 
-    static func apply(_ guess: WatchListingGuess, to d: inout ListingDraft) {
+    static func apply(_ guess: WatchListingGuess, to d: inout ListingDraft, page: String) {
         var used = false
+        func offer(_ value: String, for field: String) {
+            guard isGrounded(value, in: page) else { return }
+            d.suggest(value, for: field)
+            used = true
+        }
         let brand = guess.brand.trimmingCharacters(in: .whitespacesAndNewlines)
         if d.brand.isEmpty, !brand.isEmpty {
-            d.brand = WatchBrands.canonical(brand) ?? brand
-            used = true
+            offer(WatchBrands.canonical(brand) ?? brand, for: "Brand")
         }
         if d.reference.isEmpty, let ref = ReferenceDetector.clean(guess.reference), ref.contains(where: \.isNumber) {
-            d.reference = ref
-            used = true
+            offer(ref, for: "Reference")
         }
-        let model = WatchBrands.strip(d.brand, from: guess.model).trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = WatchBrands.strip(d.brand.isEmpty ? brand : d.brand, from: guess.model).trimmingCharacters(in: .whitespacesAndNewlines)
         if d.model.isEmpty, !model.isEmpty, model.count <= 60 {
-            d.model = model
-            used = true
+            offer(model, for: "Model")
         }
         let code = PriceParser.normalizedCode(guess.currency)
-        if d.price == nil, guess.price >= 1, guess.price < 100_000_000, code.count == 3 {
+        if d.price == nil, guess.price >= 1, guess.price < 100_000_000, code.count == 3, statesAmount(guess.price, in: page) {
             d.price = Money(amount: Decimal(guess.price.rounded()), currency: code)
             used = true
         }
         if d.specs.isEmpty {
-            let specs = guess.specs.prefix(8).compactMap { s -> Spec? in
-                let label = s.label.trimmingCharacters(in: .whitespacesAndNewlines)
+            for s in guess.specs.prefix(8) {
+                let label = SpecNormalizer.label(for: s.label.trimmingCharacters(in: .whitespacesAndNewlines))
                 let value = s.value.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !label.isEmpty, !value.isEmpty, label.count <= 30, value.count <= 80 else { return nil }
-                return Spec(label: label, value: value)
-            }
-            if !specs.isEmpty {
-                d.specs = Array(specs)
-                used = true
+                guard !label.isEmpty, label.count <= 30, value.count <= 80 else { continue }
+                offer(value, for: label)
             }
         }
         if used { d.sources.insert(.foundationModels) }

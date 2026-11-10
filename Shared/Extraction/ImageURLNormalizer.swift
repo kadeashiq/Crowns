@@ -31,6 +31,14 @@ enum ImageURLNormalizer {
             c.queryItems = items
             return c.url ?? url
         }
+
+        // Salesforce Commerce Cloud: /dw/image/v2/…?sw=600&sh=600
+        if url.path().contains("/dw/image/"), var c = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            var items = (c.queryItems ?? []).filter { !["sw", "sh", "sm", "sfrm"].contains($0.name) }
+            items.append(URLQueryItem(name: "sw", value: String(targetWidth)))
+            c.queryItems = items
+            return c.url ?? url
+        }
         return url
     }
 
