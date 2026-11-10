@@ -312,3 +312,42 @@ struct PriceNoteTests {
         #expect(local.priceNote == "")
     }
 }
+
+@Suite("Image cache", .serialized)
+struct ImageCacheTests {
+    private func picture() -> ImageBytes {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let jpeg = UIGraphicsImageRenderer(size: CGSize(width: 100, height: 100), format: format).jpegData(withCompressionQuality: 0.9) { ctx in
+            UIColor.gray.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 100, height: 100))
+        }
+        return .data(jpeg)
+    }
+
+    /// Each picture costs 40,000 here, so two fit.
+    @Test func dropsTheLeastRecentlyUsed() async {
+        let cache = ImageCache(costLimit: 80_000)
+        _ = await cache.image(for: "a", bytes: picture(), maxPixel: 100)
+        _ = await cache.image(for: "b", bytes: picture(), maxPixel: 100)
+        #expect(cache.cached("a") != nil)
+        _ = await cache.image(for: "c", bytes: picture(), maxPixel: 100)
+        #expect(cache.cached("a") != nil)
+        #expect(cache.cached("b") == nil)
+        #expect(cache.cached("c") != nil)
+    }
+
+    @Test func keepsImagesWhenTheAppGoesToTheBackground() async {
+        let cache = ImageCache()
+        _ = await cache.image(for: "a", bytes: picture(), maxPixel: 100)
+        NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: nil)
+        #expect(cache.cached("a") != nil)
+    }
+
+    @Test func letsGoWhenMemoryRunsShort() async {
+        let cache = ImageCache()
+        _ = await cache.image(for: "a", bytes: picture(), maxPixel: 100)
+        NotificationCenter.default.post(name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+        #expect(cache.cached("a") == nil)
+    }
+}

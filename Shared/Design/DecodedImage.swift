@@ -4,16 +4,59 @@ import UIKit
 
 /// Decoded, display-ready images keyed by content. Decoding happens off the
 /// main thread before anything is shown, so images never pop in half-drawn.
+///
+/// Not an NSCache, which empties when the app goes to the background. The
+/// system rebuilds a card after dropping it, and that new card has to find
+/// its image already here or its photo blinks. Least recently used go first.
 final class ImageCache: @unchecked Sendable {
     static let shared = ImageCache()
-    private let cache = NSCache<NSString, UIImage>()
 
-    init() {
-        cache.totalCostLimit = 120 * 1024 * 1024
+    private struct Entry {
+        let image: UIImage
+        let cost: Int
+        var used: Int
+    }
+
+    private let costLimit: Int
+    private let lock = NSLock()
+    private var entries: [String: Entry] = [:]
+    private var totalCost = 0
+    private var clock = 0
+
+    init(costLimit: Int = 120 * 1024 * 1024) {
+        self.costLimit = costLimit
+        _ = NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.removeAll()
+        }
     }
 
     func cached(_ key: String) -> UIImage? {
-        cache.object(forKey: key as NSString)
+        lock.withLock {
+            clock += 1
+            entries[key]?.used = clock
+            return entries[key]?.image
+        }
+    }
+
+    private func store(_ image: UIImage, for key: String) {
+        let cost = Int(image.size.width * image.size.height * 4)
+        lock.withLock {
+            clock += 1
+            totalCost += cost - (entries[key]?.cost ?? 0)
+            entries[key] = Entry(image: image, cost: cost, used: clock)
+            while totalCost > costLimit, entries.count > 1,
+                  let oldest = entries.min(by: { $0.value.used < $1.value.used }) {
+                totalCost -= oldest.value.cost
+                entries[oldest.key] = nil
+            }
+        }
+    }
+
+    private func removeAll() {
+        lock.withLock {
+            entries.removeAll()
+            totalCost = 0
+        }
     }
 
     func image(for key: String, bytes: ImageBytes, maxPixel: Int) async -> UIImage? {
@@ -22,9 +65,7 @@ final class ImageCache: @unchecked Sendable {
             guard let data = bytes.load(), let cg = ImageDownscaler.thumbnail(from: data, maxPixel: maxPixel) else { return nil }
             return UIImage(cgImage: cg, scale: 1, orientation: .up)
         }.value
-        if let image {
-            cache.setObject(image, forKey: key as NSString, cost: Int(image.size.width * image.size.height * 4))
-        }
+        if let image { store(image, for: key) }
         return image
     }
 }
