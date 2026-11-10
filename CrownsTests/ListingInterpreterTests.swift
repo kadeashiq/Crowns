@@ -41,7 +41,7 @@ struct ListingInterpreterTests {
         #expect(d.model == "Speedmaster Professional Moonwatch")
         #expect(d.reference == "311.30.42.30.01.005")
         #expect(d.price == Money(amount: 4250, currency: "USD"))
-        #expect(spec(d, "Calibre") == "1861")
+        #expect(spec(d, "Calibre") == "Calibre 1861")
         #expect(spec(d, "Case size") == "42 mm")
         #expect(d.imageURLs.first?.absoluteString == "https://i.ebayimg.com/images/g/ZZZZzzzz/s-l1600.jpg")
     }
@@ -247,6 +247,36 @@ struct PageSuggestionTests {
         #expect(reading.suggestions.isEmpty)
     }
 
+    @Test func aHeadingIsNotACalibre() {
+        let table = SpecTable([["Calibre", "At heart"], ["Movement", "Calibre at heart"]])
+        let reading = SpecNormalizer.reading(from: table, title: "", calibres: ["Jaeger-LeCoultre Caliber 868", "Calibre 868 in detail", "Caliber 925"])
+        #expect(!reading.specs.contains { $0.label == "Calibre" || $0.label == "Movement" })
+        #expect(reading.suggestions["Calibre"] == ["Calibre 868", "Calibre 925"])
+    }
+
+    @Test func oneNamedCalibreFillsTheField() {
+        let reading = SpecNormalizer.reading(from: SpecTable([]), title: "", calibres: ["Jaeger-LeCoultre Caliber 925"])
+        #expect(reading.specs.first { $0.label == "Calibre" }?.value == "Calibre 925")
+    }
+
+    @Test func labelsBrandsUseForTheSameSpec() {
+        let table = SpecTable([["Dimension", "Ø 39.00 mm"], ["Lug distance", "20 mm"], ["Lug‑to‑lug", "47.50 mm"], ["Waterproofness", "Waterproof to 200 m"], ["Power Reserve", "65-hour power reserve"], ["Total product weight (approx.)", "138 g"], ["Lugs", "20mm lug width"]])
+        let specs = Dictionary(uniqueKeysWithValues: SpecNormalizer.specs(from: table, title: "").map { ($0.label, $0.value) })
+        #expect(specs["Case size"] == "39.00 mm")
+        #expect(specs["Lug width"] == "20 mm")
+        #expect(specs["Lug to lug"] == "47.50 mm")
+        #expect(specs["Water resistance"] == "Waterproof to 200 m")
+        #expect(specs["Power reserve"] == "65-hour power reserve")
+        #expect(specs["Weight"] == "138 g")
+    }
+
+    @Test func modelNamesReadNaturally() {
+        #expect(ListingInterpreter.readable("SPIRIT PILOT") == "Spirit Pilot")
+        #expect(ListingInterpreter.readable("Master Ultra Thin MOON") == "Master Ultra Thin Moon")
+        #expect(ListingInterpreter.readable("GMT-MASTER II") == "GMT-Master II")
+        #expect(ListingInterpreter.readable("C60 Trident Pro 300") == "C60 Trident Pro 300")
+    }
+
     @Test func preOwnedDetails() {
         let specs = Dictionary(uniqueKeysWithValues: SpecNormalizer.specs(from: SpecTable([]), title: "", text: "Full set, year 2019, in excellent condition").map { ($0.label, $0.value) })
         #expect(specs["Year"] == "2019")
@@ -290,6 +320,19 @@ struct ImagePickingTests {
             ]}
             """)
         #expect(d.imageURLs.map(\.lastPathComponent) == ["1.jpg", "2.jpg"])
+    }
+
+    @Test func eachPictureInItsOwnFolderIsKept() throws {
+        let d = try draft("""
+            {"url":"https://brand.example/watch.html","metaImages":["https://brand.example/dam/Zi/Zi.png.transform.social.png"],"images":[
+              {"src":"https://brand.example/dam/Iw/Iw.jpeg.transform.detail.jpeg","w":1280,"h":1600,"g":true},
+              {"src":"https://brand.example/dam/hn/hn.jpeg.transform.detail.jpeg","w":1280,"h":1600,"g":true},
+              {"src":"https://brand.example/dam/Iw/Iw.jpeg.transform.thumb.jpeg","w":200,"h":250,"g":true},
+              {"src":"https://brand.example/dam/Zi/Zi.png.transform.thumb.png","w":201,"h":283,"g":true},
+              {"src":"https://brand.example/dam/Zi/Zi.png.transform.detail.png","w":1280,"h":1810}
+            ]}
+            """)
+        #expect(d.imageURLs.map(\.lastPathComponent) == ["Zi.png.transform.detail.png", "Iw.jpeg.transform.detail.jpeg", "hn.jpeg.transform.detail.jpeg"])
     }
 
     @Test func otherImagesNeedTheMainPhotosFolder() throws {

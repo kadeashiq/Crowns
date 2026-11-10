@@ -173,23 +173,134 @@ var CrownsExtractor = (function () {
 
   // Words that mark text as a watch specification. Includes hidden text, so
   // specs inside closed dropdowns and tabs are found too.
-  var SPEC_WORD = /\b(size|diameter|width|thickness|height|depth|lug|lug-to-lug|case|dial|bezel|crystal|glass|movement|calibre|caliber|winding|power reserve|jewels?|water|strap|bracelet|band|clasp|material|colou?r|year|weight|lume|luminous|complications?|functions?)\b/i;
+  var SPEC_WORD = /\b(size|diameter|dimensions?|width|thickness|height|depth|lugs?|lug-to-lug|case|dial|bezel|crystal|glass|movement|calibre|caliber|winding|energy|power reserve|frequency|jewels?|components|water|waterproof\w*|strap|bracelet|band|clasp|buckle|material|colou?r|year|weight|lume|luminous|complications?|functions?|reference)\b/i;
   var MEASUREMENT = /\d\s?(mm|atm|bar|m\b|metres|meters|hours?|h\b|jewels)/i;
 
   function inChrome(el) {
     return !!el.closest("nav, footer");
   }
 
+  // Help buttons and tooltips beside a label: "Jewels  Discover more…",
+  // "Between lugs  Open Case Measurement Modal".
+  var EXTRA = "button, [role=tooltip], [class*='tooltip' i], [class*='popover' i], [class*='sr-only' i], [class*='visually-hidden' i], [class*='screen-reader' i], [class~='hidden'], [class*='info-icon' i]";
+
+  function isExtra(el) {
+    return el.matches(EXTRA);
+  }
+
+  function textOf(el) {
+    if (!el.querySelector(EXTRA)) return clean(el.textContent);
+    var copy = el.cloneNode(true);
+    copy.querySelectorAll(EXTRA).forEach(function (x) {
+      x.remove();
+    });
+    return clean(copy.textContent);
+  }
+
+  function childCount(el) {
+    var n = 0;
+    for (var c = el.firstElementChild; c; c = c.nextElementSibling) if (!isExtra(c)) n++;
+    return n;
+  }
+
+  function nextOf(el) {
+    var n = el.nextElementSibling;
+    while (n && isExtra(n)) n = n.nextElementSibling;
+    return n;
+  }
+
+  // The heading a spec sits under: its tab, its accordion's button, a summary.
+  function sectionOf(el) {
+    var node = el.parentElement;
+    for (var d = 0; node && node !== document.body && d < 10; d++, node = node.parentElement) {
+      var id = node.getAttribute("aria-labelledby");
+      if (id && node.getAttribute("role") === "tabpanel") {
+        var tab = document.getElementById(id.split(" ")[0]);
+        if (tab) return clean(tab.textContent);
+      }
+      if (node.tagName === "DETAILS") {
+        var summary = node.querySelector("summary");
+        if (summary) return clean(summary.textContent);
+      }
+      var prev = node.previousElementSibling;
+      for (var k = 0; prev && k < 2; k++, prev = prev.previousElementSibling) {
+        var name = typeof prev.className === "string" ? prev.className : "";
+        if (/^(H[1-6]|BUTTON|SUMMARY|LEGEND)$/.test(prev.tagName) || /title|heading|header/i.test(name)) {
+          var t = clean(prev.textContent);
+          if (t && t.length <= 40) return t;
+        }
+      }
+    }
+    return "";
+  }
+
+  // Labelled values run together: "Type of lug: Curved edges, Lug width: 21mm"
+  // or "Stainless steel Diameter: 39 mm Thickness: 9.3mm". A label starts at
+  // its last capitalised word, or is all capitals. Returns the text before the
+  // first label, and the pairs.
+  function splitPairs(text) {
+    var re = /(^|[,;|]\s*|\s)((?:[A-Za-z][A-Za-z\-]*)(?: [A-Za-z\-]+){0,3})\s*[:：]\s*/g;
+    var marks = [];
+    var m;
+    while ((m = re.exec(text))) {
+      var words = m[2].split(" ");
+      var from = 0;
+      if (m[2] !== m[2].toUpperCase()) {
+        for (var w = words.length - 1; w >= 0; w--) {
+          if (/^[A-Z]/.test(words[w])) {
+            from = w;
+            break;
+          }
+        }
+      }
+      var label = words.slice(from).join(" ");
+      var start = m.index + m[1].length + m[2].length - label.length;
+      marks.push({ label: label, start: start, end: re.lastIndex });
+    }
+    var out = [];
+    for (var i = 0; i < marks.length; i++) {
+      var value = text.slice(marks[i].end, i + 1 < marks.length ? marks[i + 1].start : text.length).replace(/[,;|\s]+$/, "");
+      if (value) out.push([marks[i].label, value]);
+    }
+    return { lead: marks.length ? text.slice(0, marks[0].start).replace(/[,;|\s]+$/, "") : text, pairs: out };
+  }
+
+  // A label where a value should be, or help text behind an info button.
+  var NOT_A_VALUE = /^(thickness|diameter|case|dial|movement|power reserve|jewels|water resistance|lug width|(discover|learn|find out|read) more\b.*)$/i;
+
   function specs() {
     var pairs = [];
     var seen = {};
-    function add(label, value) {
+    function add(label, value, inner, el) {
       label = clean(label).replace(/[:：]\s*$/, "");
+      // The same words mean different things under different headings.
+      if (el && label) {
+        var section = sectionOf(el);
+        if (/calib|movement|mouvement/i.test(section) && !/calib|movement/i.test(label)) {
+          if (/^(reference|ref\.?|name|number|model)$/i.test(label)) label = "Calibre";
+          else if (/^(diameter|thickness|height|dimensions?)$/i.test(label)) label = "Movement " + label.toLowerCase();
+        } else if (/strap|bracelet|band|buckle|clasp/i.test(section) && /^(type of )?(material|colou?r)$/i.test(label)) {
+          label = "Bracelet " + label.replace(/^type of /i, "").toLowerCase();
+        }
+      }
       value = clean(value)
         .replace(/\s*Read more.*$/i, "")
         .replace(/\s*See all condition definitions.*$/i, "")
         .replace(/\s*opens in a new window or tab.*$/i, "");
-      if (!label || !value || label.length > 48 || value.length > 160) return;
+      // A value holding labelled values of its own gives each its own pair.
+      if (!inner && /[:：]/.test(value)) {
+        var split = splitPairs(value);
+        var specPairs = split.pairs.filter(function (p) {
+          return SPEC_WORD.test(p[0]);
+        });
+        if (specPairs.length) {
+          specPairs.forEach(function (p) {
+            add(p[0], p[1], true, el);
+          });
+          value = split.lead;
+        }
+      }
+      if (!label || !value || label.length > 48 || value.length > 160 || NOT_A_VALUE.test(value)) return;
       if (label.toLowerCase() === value.toLowerCase()) return;
       var key = label.toLowerCase();
       if (seen[key]) return;
@@ -208,13 +319,13 @@ var CrownsExtractor = (function () {
     for (var j = 0; j < dts.length; j++) {
       var dd = dts[j].nextElementSibling;
       while (dd && dd.tagName !== "DD" && dd.tagName !== "DT") dd = dd.nextElementSibling;
-      if (dd && dd.tagName === "DD") add(dts[j].textContent, dd.textContent);
+      if (dd && dd.tagName === "DD") add(textOf(dts[j]), textOf(dd), false, dts[j]);
     }
     // Two-cell table rows.
     var rows = document.querySelectorAll("table tr");
     for (var k = 0; k < rows.length && k < 400; k++) {
       var cells = rows[k].querySelectorAll("th, td");
-      if (cells.length === 2) add(cells[0].textContent, cells[1].textContent);
+      if (cells.length === 2) add(textOf(cells[0]), textOf(cells[1]), false, rows[k]);
     }
     // Options chosen on the page, such as the strap.
     var selects = document.querySelectorAll("select");
@@ -236,24 +347,31 @@ var CrownsExtractor = (function () {
     var nodes = document.querySelectorAll("li, p, div, span, strong, b, h2, h3, h4, h5, h6, label");
     for (var n = 0; n < nodes.length && n < 8000; n++) {
       var el = nodes[n];
-      if (el.children.length > 1) continue;
-      var text = clean(el.textContent);
+      if (isExtra(el) || el.closest(EXTRA) || childCount(el) > 1) continue;
+      var text = textOf(el);
       if (!text || text.length > 170) continue;
-      var inline = text.match(/^([^:：]{2,40})[:：]\s*(.{1,120})$/);
-      if (inline && SPEC_WORD.test(inline[1])) {
-        if (!inChrome(el)) add(inline[1], inline[2]);
-        continue;
+      if (/[:：]/.test(text)) {
+        var inline = splitPairs(text).pairs.filter(function (p) {
+          return SPEC_WORD.test(p[0]);
+        });
+        if (inline.length) {
+          if (!inChrome(el))
+            inline.forEach(function (p) {
+              add(p[0], p[1], false, el);
+            });
+          continue;
+        }
       }
-      if (el.children.length || text.length > 40 || !SPEC_WORD.test(text) || /[.!?]$/.test(text)) continue;
-      var next = el.nextElementSibling;
+      if (childCount(el) || text.length > 40 || !SPEC_WORD.test(text) || /[.!?]$/.test(text)) continue;
+      var next = nextOf(el);
       var holder = el.parentElement;
-      if (!next && holder && holder.children.length === 1) next = holder.nextElementSibling;
-      var value = next ? clean(next.textContent) : "";
-      if (!next && holder && clean(holder.textContent).indexOf(text) === 0) value = clean(holder.textContent).slice(text.length);
+      if (!next && holder && childCount(holder) === 1) next = nextOf(holder);
+      var value = next ? textOf(next) : "";
+      if (!next && holder && textOf(holder).indexOf(text) === 0) value = textOf(holder).slice(text.length);
       if (!value || inChrome(el)) continue;
       // Two labels in a row: the "value" is really the next label.
       if (next && el.className && next.tagName === el.tagName && next.className === el.className) continue;
-      add(text, value);
+      add(text, value, false, el);
     }
     return pairs;
   }
@@ -267,6 +385,22 @@ var CrownsExtractor = (function () {
       if (el.children.length > 2) continue;
       var t = clean(el.textContent);
       if (t.length < 8 || t.length > 220 || !MEASUREMENT.test(t) || !SPEC_WORD.test(t) || inChrome(el)) continue;
+      if (out.indexOf(t) === -1) out.push(t);
+    }
+    return out;
+  }
+
+  // Short lines naming a calibre ("Jaeger-LeCoultre Caliber 925"), from the
+  // page's own content: menus advertise other calibres.
+  function calibres() {
+    var out = [];
+    var nodes = document.querySelectorAll("h1, h2, h3, h4, h5, h6, p, li, dd, td, span, strong, div");
+    for (var i = 0; i < nodes.length && i < 8000 && out.length < 12; i++) {
+      var el = nodes[i];
+      if (el.children.length > 2) continue;
+      var t = clean(el.textContent);
+      if (t.length < 6 || t.length > 90 || !/\b(calibre|caliber|cal\.|movement)\s*[A-Z]{0,4}[ \-]?\d/i.test(t)) continue;
+      if (inChrome(el) || region(el) === "skip" || el.closest("[class*='mega-menu' i], [class*='megamenu' i], [role=navigation], [role=menu]")) continue;
       if (out.indexOf(t) === -1) out.push(t);
     }
     return out;
@@ -303,6 +437,19 @@ var CrownsExtractor = (function () {
         if (!t || t.length > 60 || !/\d/.test(t)) continue;
         if (!CURRENCY_HINT.test(t) && !el.getAttribute("content")) continue;
         if (out.indexOf(t) === -1) out.push(t);
+      }
+    }
+    // Nothing marked as a price: a line that is only an amount, outside
+    // menus and other products, such as Tudor's "£4,160".
+    if (!out.length) {
+      var leaves = document.querySelectorAll("span, p, div, strong");
+      for (var k = 0; k < leaves.length && k < 6000 && out.length < 3; k++) {
+        var leaf = leaves[k];
+        if (leaf.children.length) continue;
+        var amount = clean(leaf.textContent);
+        if (!/^(£|\$|€|CHF|GBP|USD|EUR)\s?\d[\d,.'’ ]*$/.test(amount)) continue;
+        if (inChrome(leaf) || region(leaf) === "skip" || leaf.closest("s, del, strike")) continue;
+        if (out.indexOf(amount) === -1) out.push(amount);
       }
     }
     return out;
@@ -409,6 +556,71 @@ var CrownsExtractor = (function () {
     return link ? absolute(link.getAttribute("href")) : "";
   }
 
+  // What each dropdown showed while it was open. Some sites close one when
+  // the next opens and drop what it showed.
+  var gathered = { specs: [], specLines: [], calibres: [] };
+
+  function gather() {
+    try {
+      gathered.specs = gathered.specs.concat(specs());
+      gathered.specLines = gathered.specLines.concat(specLines());
+      gathered.calibres = gathered.calibres.concat(calibres());
+    } catch (e) {}
+  }
+
+  // Adds what the dropdowns showed to what the page shows now, keeping the
+  // first value for each label.
+  function withGathered(now, extra, key) {
+    var out = now.slice();
+    var seen = {};
+    now.forEach(function (item) {
+      seen[key(item)] = true;
+    });
+    extra.forEach(function (item) {
+      var k = key(item);
+      if (!seen[k]) {
+        seen[k] = true;
+        out.push(item);
+      }
+    });
+    return out;
+  }
+
+  // Opens the page's spec dropdowns, which some sites only fill in once
+  // opened, one at a time so each has a moment to render, then calls done.
+  var SPEC_SECTION = /(spec|technical|detail|feature|characteristic|movement|calib|caliber|case|dial|strap|bracelet|dimension|information|watch)/i;
+  function expand(done) {
+    var details = document.querySelectorAll("details:not([open])");
+    for (var i = 0; i < details.length && i < 20; i++) {
+      if (!details[i].closest("nav, header, footer")) details[i].open = true;
+    }
+    var targets = [];
+    var toggles = document.querySelectorAll("[aria-expanded='false']");
+    for (var j = 0; j < toggles.length && targets.length < 12; j++) {
+      var t = toggles[j];
+      if (t.closest("nav, header, footer, form, [role=dialog], [role=menu], [role=navigation], [class*='mega-menu' i], [class*='cookie' i], [id*='cookie' i], [class*='consent' i]")) continue;
+      var label = clean(t.textContent);
+      if (label && label.length <= 40 && SPEC_SECTION.test(label)) targets.push(t);
+    }
+    var next = 0;
+    (function openNext() {
+      if (next >= targets.length) {
+        setTimeout(function () {
+          done(targets.length);
+        }, targets.length ? 600 : 0);
+        return;
+      }
+      try {
+        if (targets[next].getAttribute("aria-expanded") === "false") targets[next].click();
+      } catch (e) {}
+      next++;
+      setTimeout(function () {
+        gather();
+        openNext();
+      }, 250);
+    })();
+  }
+
   function snapshot() {
     var out = { v: 1, url: document.URL, title: clean(document.title), lang: document.documentElement.getAttribute("lang") || "" };
     function attempt(key, fn) {
@@ -421,7 +633,13 @@ var CrownsExtractor = (function () {
     attempt("canonical", canonical);
     attempt("h1", function () {
       var h = document.querySelector("h1");
-      return h ? clean(h.textContent).slice(0, 300) : "";
+      if (!h) return "";
+      // A heading's lines run together in textContent. The name is its first
+      // lines, up to one that lists details ("Oyster, 41 mm, Oystersteel").
+      var lines = String(h.innerText || "").split(/\n+/).map(clean).filter(Boolean);
+      var name = [];
+      for (var i = 0; i < lines.length && !/\d\s?mm\b|,/.test(lines[i]); i++) name.push(lines[i]);
+      return (name.length ? name.join(" ") : clean(h.textContent)).slice(0, 300);
     });
     attempt("meta", function () {
       var m = meta();
@@ -431,27 +649,43 @@ var CrownsExtractor = (function () {
     attempt("jsonld", jsonld);
     attempt("shopify", shopify);
     attempt("microdata", microdata);
-    attempt("specs", specs);
-    attempt("specLines", specLines);
+    attempt("specs", function () {
+      return withGathered(specs(), gathered.specs, function (p) {
+        return p[0].toLowerCase();
+      });
+    });
+    attempt("specLines", function () {
+      return withGathered(specLines(), gathered.specLines, String).slice(0, 80);
+    });
+    attempt("calibres", function () {
+      return withGathered(calibres(), gathered.calibres, String).slice(0, 12);
+    });
     attempt("priceTexts", priceTexts);
     attempt("images", images);
     attempt("text", pageText);
     return JSON.stringify(out);
   }
 
-  return { snapshot: snapshot };
+  return { snapshot: snapshot, expand: expand };
 })();
 
 // Safari share-sheet entry point. Must be a top-level var with this name.
 var ExtensionPreprocessingJS = {
   run: function (args) {
-    var result;
-    try {
-      result = CrownsExtractor.snapshot();
-    } catch (e) {
-      result = JSON.stringify({ v: 1, url: document.URL, title: document.title, errors: [String(e)] });
+    function finish() {
+      var result;
+      try {
+        result = CrownsExtractor.snapshot();
+      } catch (e) {
+        result = JSON.stringify({ v: 1, url: document.URL, title: document.title, errors: [String(e)] });
+      }
+      args.completionFunction({ snapshot: result });
     }
-    args.completionFunction({ snapshot: result });
+    try {
+      CrownsExtractor.expand(finish);
+    } catch (e) {
+      finish();
+    }
   },
   finalize: function (args) {},
 };

@@ -29,6 +29,7 @@ struct SpecTable {
     static func key(_ s: String) -> String {
         s.lowercased()
             .folding(options: .diacriticInsensitive, locale: nil)
+            .replacingOccurrences(of: #"[\u2010\u2011\u2012\u2013]"#, with: "-", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: ": ").union(.whitespacesAndNewlines))
     }
 }
@@ -36,11 +37,11 @@ struct SpecTable {
 /// Maps the many ways shops label specs onto one short, ordered set.
 enum SpecNormalizer {
     private static let canon: [(label: String, keys: [String])] = [
-        ("Case size", ["case size", "case diameter", "diameter", "case width", "case size (mm)", "case dimensions", "size"]),
+        ("Case size", ["case size", "case diameter", "diameter", "case width", "case size (mm)", "case dimensions", "dimension", "dimensions", "size"]),
         ("Thickness", ["thickness", "case thickness", "case depth", "case height", "height", "depth", "thickness (mm)"]),
-        ("Lug width", ["lug width", "lug size"]),
+        ("Lug width", ["lug width", "lug size", "between lugs", "width between lugs", "lug distance", "strap width", "lugs"]),
         ("Lug to lug", ["lug-to-lug", "lug to lug", "lug to lug length", "lug-to-lug length"]),
-        ("Movement", ["movement", "movement type", "winding", "mechanism", "type of movement"]),
+        ("Movement", ["movement", "movement type", "winding", "mechanism", "type of movement", "energy"]),
         ("Calibre", ["calibre", "caliber", "movement calibre", "movement caliber", "calibre number", "caliber number"]),
         ("Power reserve", ["power reserve"]),
         ("Jewels", ["no of jewels", "number of jewels", "jewels"]),
@@ -50,8 +51,8 @@ enum SpecNormalizer {
         ("Bezel", ["bezel", "bezel material", "bezel type"]),
         ("Crystal", ["crystal", "glass", "crystal material"]),
         ("Bracelet", ["bracelet", "strap", "band", "band material", "bracelet material", "strap material", "bracelet/strap"]),
-        ("Weight", ["case weight", "weight"]),
-        ("Water resistance", ["water resistance", "water resistant", "water-resistance", "water resistance rating"]),
+        ("Weight", ["case weight", "weight", "total product weight (approx.)", "total product weight", "total weight"]),
+        ("Water resistance", ["water resistance", "water resistant", "water-resistance", "water resistance rating", "waterproofness", "waterproof"]),
         ("Year", ["year", "year manufactured", "year of manufacture", "production year", "year of production"]),
         ("Condition", ["condition"]),
         ("Box", ["with original box/packaging", "original box", "with box", "box"]),
@@ -87,16 +88,24 @@ enum SpecNormalizer {
     }
 
     /// The specs, and the values found for any the page wasn't clear about:
-    /// a measurement stated two different ways is left for the user to pick.
-    static func reading(from table: SpecTable, title: String, text: String = "") -> (specs: [Spec], suggestions: [String: [String]]) {
+    /// a measurement stated two different ways, or a labelled value that
+    /// isn't what the label means, is left for the user to pick.
+    /// - Parameter calibres: short lines from the page that name a calibre.
+    static func reading(from table: SpecTable, title: String, text: String = "", calibres: [String] = []) -> (specs: [Spec], suggestions: [String: [String]]) {
         var out: [Spec] = []
         var unsure: [String: [String]] = [:]
+        // Labels the page gave a value for that doesn't fit, such as "Calibre: at heart".
+        var misfits: Set<String> = []
         for (label, keys) in canon {
             var value: String?
             for key in keys {
                 guard let v = table.value(key) else { continue }
                 // "Size" alone is often S/M/L; only accept it with a measurement.
                 if key == "size", !v.lowercased().contains("mm") { continue }
+                guard fits(v, label: label) else {
+                    misfits.insert(label)
+                    continue
+                }
                 value = v
                 break
             }
@@ -104,18 +113,29 @@ enum SpecNormalizer {
             if label == "Condition", let colon = v.firstIndex(of: ":"), v.distance(from: v.startIndex, to: colon) < 24 {
                 v = String(v[..<colon])
             }
+            // "20mm lug width" and "Ø 39.00 mm" are just the measurement.
+            if ["Case size", "Thickness", "Lug width", "Lug to lug"].contains(label),
+               let range = v.range(of: #"^[\sØ⌀]*\d+(?:[.,]\d+)?\s*mm\b"#, options: .regularExpression) {
+                v = String(v[range]).trimmingCharacters(in: CharacterSet(charactersIn: "Ø⌀ "))
+            }
+            // "1326" alone reads better as "Calibre 1326".
+            if label == "Calibre", v.first?.isNumber == true { v = "Calibre " + v }
             if v.count > 80 { v = String(v.prefix(77)).trimmingCharacters(in: .whitespaces) + "…" }
             out.append(Spec(label: label, value: v))
         }
-        for (label, patterns, format) in sentencePatterns where !out.contains(where: { $0.label == label }) {
+        let calibrePattern = #"\b(?:calibre|caliber|cal\.)\s*([A-Z]{0,4}[ \-]?\d[A-Za-z0-9.\-/]*)"#
+        for (label, patterns, format) in sentencePatterns + [("Calibre", [calibrePattern], { "Calibre \($0)" })]
+        where !out.contains(where: { $0.label == label }) {
+            let source = label == "Calibre" ? calibres.joined(separator: "\n") : text
             var values: [String] = []
-            for found in captures(patterns, in: text) {
-                let value = format(found)
+            for found in captures(patterns, in: source) {
+                let value = format(found.trimmingCharacters(in: CharacterSet(charactersIn: ".-/ ")))
                 if !values.contains(where: { sameMeasure($0, value) }) { values.append(value) }
             }
-            if values.count == 1 {
+            // One clear value fills the field, unless the page labelled something else as this.
+            if values.count == 1, !misfits.contains(label) {
                 out.append(Spec(label: label, value: values[0]))
-            } else if values.count > 1 {
+            } else if !values.isEmpty {
                 unsure[label] = Array(values.prefix(3))
             }
         }
@@ -123,6 +143,27 @@ enum SpecNormalizer {
             out.append(Spec(label: "Case size", value: size))
         }
         return (ordered(out), unsure)
+    }
+
+    /// What a value has to look like to be the spec its label names.
+    private static let shapes: [String: String] = [
+        "Case size": #"\d+(?:[.,]\d+)?\s*mm"#,
+        "Thickness": #"\d+(?:[.,]\d+)?\s*mm"#,
+        "Lug width": #"\d+(?:[.,]\d+)?\s*mm"#,
+        "Lug to lug": #"\d+(?:[.,]\d+)?\s*mm"#,
+        "Water resistance": #"\d+\s*(?:m\b|metres|meters|atm|bar|ft)"#,
+        "Power reserve": #"\d+\s*-?\s*(?:h\b|hours?|hrs|days?)"#,
+        "Jewels": #"\d"#,
+        "Calibre": #"\d"#,
+        // A calibre number or how it's wound; "Calibre at heart" is a heading.
+        "Movement": #"\d|automatic|manual|hand|self|quartz|mechanical|winding|wound|kinetic|solar|spring drive|eco-drive"#,
+        "Year": #"\b(?:19|20)\d{2}\b"#,
+        "Weight": #"\d+(?:[.,]\d+)?\s*g\b"#,
+    ]
+
+    static func fits(_ value: String, label: String) -> Bool {
+        guard let shape = shapes[label] else { return true }
+        return value.range(of: shape, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     /// "100 meters" and "100m" say the same thing.
@@ -140,7 +181,7 @@ enum SpecNormalizer {
     private static let sentencePatterns: [(String, [String], (String) -> String)] = [
         ("Case size", [
             #"(?<![\d.])(\d{2}(?:\.\d+)?)\s?mm\s+(?:(?:case\s+)?(?:width|diameter)|case\b(?!\s+(?:length|thick|height|depth|back)))"#,
-            #"\b(?:case|diameter|(?<!lug )(?<!strap )(?<!band )(?<!bracelet )width)"# + labelGap + #"(\d{2}(?:\.\d+)?)\s?mm"#,
+            #"\b(?:case|diameter|(?<!lug )(?<!strap )(?<!band )(?<!bracelet )(?<!buckle )(?<!clasp )width)"# + labelGap + #"(\d{2}(?:\.\d+)?)\s?mm"#,
         ], { "\($0) mm" }),
         ("Thickness", [
             #"(?<![\d.])(\d{1,2}(?:\.\d+)?)\s?mm\s+(?:case\s+)?(?:thick|high\b|height|depth)"#,
@@ -148,6 +189,16 @@ enum SpecNormalizer {
         ], { "\($0) mm" }),
         ("Water resistance", [#"water[- ]?resist\w*[^.\n\d]{0,24}(\d+\s?(?:m|metres|meters|atm|bar)\b)"#, #"(\d+\s?(?:m|metres|meters|atm|bar))\s+water[- ]?resist"#], { $0 }),
         ("Power reserve", [#"power reserve[^.\n\d]{0,24}(\d+)\s?h"#, #"(\d+)[- ]?hours?[^.\n]{0,20}power reserve"#], { "\($0) hours" }),
+        ("Lug width", [
+            #"(?<![\d.])(\d{2}(?:\.\d+)?)\s?mm\s+lug\s+width"#,
+            #"\blug\s+width[ \t:]+"# + labelGap + #"(\d{2}(?:\.\d+)?)\s?mm"#,
+        ], { "\($0) mm" }),
+        ("Lug to lug", [
+            #"(?<![\d.])(\d{2}(?:\.\d+)?)\s?mm\s+(?:case\s+length\s*/\s*)?lug[\s\-\u2011]?to[\s\-\u2011]?lug"#,
+            #"\blug[\s\-\u2011]?to[\s\-\u2011]?lug[ \t:]+"# + labelGap + #"(\d{2}(?:\.\d+)?)\s?mm"#,
+        ], { "\($0) mm" }),
+        // A movement named by its maker: "Miyota 9039", "Sellita SW200-1".
+        ("Movement", [#"\b((?:Miyota|Sellita|ETA|Valjoux|Soprod|Ronda|La Joux-Perret|Unitas|Peseux|Landeron|Seagull)\s+(?:[A-Z]{1,3}[\s-]?)?\d{2,4}[A-Za-z0-9\-.]*)"#], { $0 }),
         // Pre-owned listings.
         ("Year", [#"\b(?:year|circa|dated)\s*:?\s*((?:19[3-9]|20[0-3])\d)\b"#], { $0 }),
         ("Condition", [#"\b(unworn|brand new|new old stock|mint|excellent|very good|good|fair)\s+condition\b"#], { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }),

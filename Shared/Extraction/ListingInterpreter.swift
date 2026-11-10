@@ -28,10 +28,10 @@ enum ListingInterpreter {
 
         d.brand = brand(table: table, product: product, shopify: shopify, micro: micro, meta: meta, name: name, allTitles: allTitles, siteName: d.siteName, host: d.sourceURL?.host())
         d.reference = reference(table: table, product: product, micro: micro, name: name, allTitles: allTitles, text: s.text)
-        d.model = model(table: table, product: product, name: name, h1: s.h1, brand: d.brand, reference: d.reference)
+        d.model = model(table: table, product: product, name: name, h1: s.h1, title: s.title, siteName: d.siteName, brand: d.brand, reference: d.reference)
         d.price = price(product: product, shopify: shopify, micro: micro, meta: meta, priceTexts: s.priceTexts ?? [], s: s)
         d.summary = String((first(product?["description"]?.string, shopify?["description"]?.string, meta["og:description"], meta["description"]) ?? "").prefix(600))
-        let specs = SpecNormalizer.reading(from: table, title: name, text: ([name] + (s.specLines ?? []) + [d.summary]).joined(separator: "\n"))
+        let specs = SpecNormalizer.reading(from: table, title: name, text: ([name] + (s.specLines ?? []) + [d.summary]).joined(separator: "\n"), calibres: s.calibres ?? [])
         d.specs = specs.specs
         for (label, values) in specs.suggestions {
             for value in values { d.suggest(value, for: label) }
@@ -127,16 +127,33 @@ enum ListingInterpreter {
         return ""
     }
 
-    private static func model(table: SpecTable, product: JSONValue?, name: String, h1: String?, brand: String, reference: String) -> String {
+    private static func model(table: SpecTable, product: JSONValue?, name: String, h1: String?, title: String?, siteName: String, brand: String, reference: String) -> String {
         let fields = [table.value("model", "model name"), product?["model"]?.string]
             .compactMap(ReferenceDetector.clean)
             .filter { !ReferenceDetector.isReferenceLike($0) }
-        // Titles skip clean(): its length limit is for spec values, and listing titles run long.
-        for candidate in fields + [name, h1].compactMap({ $0 }) {
-            let derived = deriveModel(from: candidate, brand: brand, reference: reference)
-            if !derived.isEmpty { return derived }
+        for field in fields {
+            let derived = deriveModel(from: field, brand: brand, reference: reference)
+            if !derived.isEmpty { return readable(derived) }
         }
-        return ""
+        // Titles skip clean(): its length limit is for spec values, and listing titles run long.
+        let titles = [name, h1, title.map { cleanTitle($0, siteName: siteName) }].compactMap { $0 }
+        let derived = titles.map { deriveModel(from: $0, brand: brand, reference: reference) }.filter { !$0.isEmpty }
+        guard let first = derived.first else { return "" }
+        // A product's short name ("Moon") is often the end of a fuller one
+        // elsewhere on the page ("Master Ultra Thin Moon").
+        let fuller = derived.filter { (" " + $0.lowercased() + " ").contains(" " + first.lowercased() + " ") && $0.count > first.count }.max { $0.count < $1.count }
+        return readable(fuller ?? first)
+    }
+
+    /// "SPIRIT PILOT" → "Spirit Pilot". Short capitals such as GMT or II stay as they are.
+    static func readable(_ model: String) -> String {
+        model.split(separator: " ").map { word in
+            word.split(separator: "-", omittingEmptySubsequences: false).map { part in
+                let letters = part.filter(\.isLetter)
+                guard letters.count > 3, letters == letters.uppercased(), !part.contains(where: \.isNumber) else { return String(part) }
+                return part.prefix(1) + part.dropFirst().lowercased()
+            }.joined(separator: "-")
+        }.joined(separator: " ")
     }
 
     private static func price(product: JSONValue?, shopify: JSONValue?, micro: [String: String], meta: [String: String], priceTexts: [String], s: PageSnapshot) -> Money? {
@@ -196,12 +213,18 @@ enum ListingInterpreter {
         if fromData.count >= 2 { return fromData }
 
         let all = s.images ?? []
-        let gallery = all.filter { $0.g == true }.map(\.src)
-        let found = ImageURLNormalizer.unique(listed + (s.metaImages ?? []) + gallery, base: s.pageURL)
+        let isLarge: (PageSnapshot.Image) -> Bool = { ($0.w ?? 0) == 0 || ($0.w ?? 0) >= 300 }
+        // A gallery thumbnail stands for the largest copy of the same picture on the page.
+        let gallery = all.filter { $0.g == true }.compactMap { image -> String? in
+            if isLarge(image) { return image.src }
+            let key = pictureKey(image.src, base: s.pageURL)
+            return all.filter { pictureKey($0.src, base: s.pageURL) == key && isLarge($0) }.max { ($0.w ?? 0) < ($1.w ?? 0) }?.src
+        }
+        let found = pictures(listed + gallery, socialImages: s.metaImages ?? [], base: s.pageURL)
         if found.count >= 2 {
-            // A page can have more than one slider. The product's own photos
-            // share a folder with its first gallery photo.
-            let first = ImageURLNormalizer.unique(gallery, base: s.pageURL).first ?? found[0]
+            // A page can have more than one slider. When several pictures
+            // share the first gallery photo's folder, those are the product's.
+            let first = pictures(gallery, socialImages: [], base: s.pageURL).first ?? found[0]
             let same = found.filter { isSameProduct($0, as: first, reference: reference) }
             return same.count >= 2 ? same : found
         }
@@ -209,9 +232,46 @@ enum ListingInterpreter {
         let others = ImageURLNormalizer.unique(all.filter { $0.g != true && (($0.w ?? 0) == 0 || ($0.w ?? 0) >= 300) }.map(\.src), base: s.pageURL)
         guard let main = found.first ?? others.first else { return [] }
         let related = others.filter { isSameProduct($0, as: main, reference: reference) }
-        // A page with no folder or name to go by keeps what it has.
-        let extra = related.isEmpty ? others : related
+        // Narrowed only when that still leaves a choice of photos.
+        let extra = found.count + related.count >= 2 ? related : others
         return ImageURLNormalizer.unique((found + extra).map(\.absoluteString), base: nil)
+    }
+
+    /// One URL per picture. A shop often serves the same picture at several
+    /// sizes; a social-sharing copy gives way to the page's own.
+    private static func pictures(_ raws: [String], socialImages: [String], base: URL?) -> [URL] {
+        var out: [URL] = []
+        var social: Set<Int> = []
+        var index: [String: Int] = [:]
+        for (raw, isSocial) in socialImages.map({ ($0, true) }) + raws.map({ ($0, false) }) {
+            guard let url = ImageURLNormalizer.normalize(raw, relativeTo: base) else { continue }
+            let key = pictureKey(url)
+            if let at = index[key] {
+                if social.contains(at), !isSocial {
+                    out[at] = url
+                    social.remove(at)
+                }
+                continue
+            }
+            index[key] = out.count
+            if isSocial { social.insert(out.count) }
+            out.append(url)
+            if out.count == 16 { break }
+        }
+        return out
+    }
+
+    /// The folder and the name before the first dot: "…/Iw/IwVLA.jpeg.transform.vacthmb.jpeg"
+    /// and "…/Iw/IwVLA.jpeg.transform.vacdetail.jpeg" are one picture.
+    private static func pictureKey(_ url: URL) -> String {
+        let path = url.path().lowercased()
+        let folder = (path as NSString).deletingLastPathComponent
+        let name = (path as NSString).lastPathComponent.split(separator: ".").first.map(String.init) ?? ""
+        return (url.host()?.lowercased() ?? "") + folder + "/" + name
+    }
+
+    private static func pictureKey(_ raw: String, base: URL?) -> String {
+        ImageURLNormalizer.normalize(raw, relativeTo: base).map(pictureKey) ?? raw
     }
 
     /// Photos of one product usually share a folder, or carry its reference.
@@ -294,12 +354,13 @@ enum ListingInterpreter {
             let lower = token.lowercased()
                 .replacingOccurrences(of: "\u{2011}", with: "-")
                 .replacingOccurrences(of: "\u{2010}", with: "-")
-            let next = i + 1 < tokens.count ? tokens[i + 1].lowercased() : ""
+            let next = i + 1 < tokens.count ? trimmedToken(tokens[i + 1]).lowercased() : ""
             let isNoise = token.isEmpty
                 || separators.contains(lower)
                 || noise.contains(lower)
                 || (colours.contains(lower) && colourFollowers.contains(next))
                 || lower.range(of: #"^\d+(\.\d+)?(mm|ct|k|kt)$"#, options: .regularExpression) != nil
+                || (lower.allSatisfy { $0.isNumber || $0 == "." } && ["mm", "ct", "k", "kt"].contains(next))
                 || lower.range(of: #"^(19|20)\d{2}$"#, options: .regularExpression) != nil
                 || lower.contains(where: { "£$€".contains($0) })
                 || ReferenceDetector.isReferenceLike(token)

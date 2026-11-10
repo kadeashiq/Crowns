@@ -101,7 +101,12 @@ final class WebPageReader: NSObject, WKNavigationDelegate {
     }
 
     private func evaluate(in web: WKWebView) async -> PageSnapshot? {
-        let body = ExtractorScript.source + "\nreturn CrownsExtractor.snapshot();"
+        // Opens spec dropdowns first: some sites only fill them in once opened.
+        let body = ExtractorScript.source + """
+
+            await new Promise(function (done) { CrownsExtractor.expand(done); });
+            return CrownsExtractor.snapshot();
+            """
         do {
             let value = try await web.callAsyncJavaScript(body, arguments: [:], in: nil, contentWorld: .defaultClient)
             return (value as? String).flatMap(PageSnapshot.decode)

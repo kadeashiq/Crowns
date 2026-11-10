@@ -221,19 +221,30 @@ struct ModelTests {
         #expect(context.changedModelsArray.count == 1)
     }
 
-    @Test func aValueFromThePageFillsItsFieldWhenPicked() throws {
+    @Test func valuesThePageWasUnsureOfCanBePickedOrRemoved() throws {
         let context = try memoryContext()
         let model = AddWatchModel(context: context, isExtension: false) { _ in }
-        model.suggestions = ["Case size": ["38 mm", "41 mm"], "Model": ["Black Bay"]]
-        #expect(model.suggestions(for: "Case size") == ["38 mm", "41 mm"])
-        model.model = "Pelagos"
-        #expect(model.suggestions(for: "Model").isEmpty)
+        model.specs = [EditableSpec(label: "Calibre", value: "Calibre 868")]
+        model.suggested = ["Calibre": ["Calibre 868", "Calibre 925"]]
+        #expect(model.options(for: "Calibre") == ["Calibre 868", "Calibre 925"])
 
-        model.use("41 mm", for: "Case size")
+        model.pick("Calibre 925", for: "Calibre")
+        #expect(model.value(of: "Calibre") == "Calibre 925")
 
-        #expect(model.specs.first { $0.label == "Case size" }?.value == "41 mm")
-        #expect(model.suggestions(for: "Case size").isEmpty)
-        #expect(model.hasSuggestions == false)
+        model.removeOption("Calibre 925", for: "Calibre")
+        #expect(model.value(of: "Calibre") == "Calibre 868")
+        model.removeOption("Calibre 868", for: "Calibre")
+        #expect(model.value(of: "Calibre").isEmpty)
+        #expect(!model.hasSuggestions)
+    }
+
+    @Test func editingAnUnsureValueMakesItTheUsers() throws {
+        let context = try memoryContext()
+        let model = AddWatchModel(context: context, isExtension: false) { _ in }
+        model.reference = "M79030N"
+        model.suggested = ["Reference": ["M79030N"]]
+        model.reference = "M79030N-0001"
+        #expect(!model.isSuggested("Reference"))
     }
 
     @Test func savingKeepsWhatWasTyped() async throws {

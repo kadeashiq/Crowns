@@ -34,34 +34,19 @@ enum ImageFetcher {
         return URLSession(configuration: config)
     }()
 
-    /// Fetches up to `limit` usable photos, in the order given. Once
-    /// `patience` has run out and there is at least one, slow ones are left
-    /// behind rather than holding up the rest.
-    static func photos(from urls: [URL], referer: URL?, limit: Int = 8, patience: Duration = .seconds(4)) async -> [Photo] {
+    /// Fetches up to `limit` usable photos, in the order given. Waits for
+    /// every candidate, so the cover can be picked from all of them; the
+    /// session's timeouts stop a slow one holding things up for long.
+    static func photos(from urls: [URL], referer: URL?, limit: Int = 8) async -> [Photo] {
         let candidates = Array(urls.prefix(limit + 4))
         guard !candidates.isEmpty else { return [] }
         return await withTaskGroup(of: (Int, Photo?).self) { group in
             for (index, url) in candidates.enumerated() {
                 group.addTask { (index, await photo(from: url, referer: referer)) }
             }
-            group.addTask {
-                try? await Task.sleep(for: patience)
-                return (-1, nil)
-            }
             var found: [Int: Photo] = [:]
-            var settled = 0
-            var outOfPatience = false
             for await (index, photo) in group {
-                if index < 0 {
-                    outOfPatience = true
-                } else {
-                    settled += 1
-                    found[index] = photo
-                }
-                if settled == candidates.count || (outOfPatience && !found.isEmpty) {
-                    group.cancelAll()
-                    break
-                }
+                found[index] = photo
             }
             return found.sorted { $0.key < $1.key }.prefix(limit).map(\.value)
         }

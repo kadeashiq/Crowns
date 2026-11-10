@@ -17,6 +17,8 @@ struct PageSnapshot: Codable, Hashable {
     var specs: [[String]]?
     /// Short lines stating a measurement, including text in closed dropdowns.
     var specLines: [String]?
+    /// Short lines naming a calibre, outside the site's menus.
+    var calibres: [String]?
     var priceTexts: [String]?
     var images: [Image]?
     var text: String?

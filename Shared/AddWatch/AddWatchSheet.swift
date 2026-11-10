@@ -200,18 +200,15 @@ struct AddWatchForm: View {
     private var detailsSection: some View {
         Section {
             Group {
-                row("Brand", placeholder: "Add brand", text: $model.brand, focus: .brand, next: .model)
+                row("Brand", placeholder: "Add brand", text: $model.brand, focus: .brand, next: .model, field: "Brand")
                     .autocorrectionDisabled()
                 typingSuggestions(for: .brand)
-                pageSuggestions(for: "Brand", unless: .brand)
-                row("Model", placeholder: "Add model", text: $model.model, focus: .model, next: .reference)
+                row("Model", placeholder: "Add model", text: $model.model, focus: .model, next: .reference, field: "Model")
                     .autocorrectionDisabled()
                 typingSuggestions(for: .model)
-                pageSuggestions(for: "Model", unless: .model)
-                row("Reference", placeholder: "Optional", text: $model.reference, focus: .reference, next: .price)
+                row("Reference", placeholder: "Optional", text: $model.reference, focus: .reference, next: .price, field: "Reference")
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.characters)
-                pageSuggestions(for: "Reference", unless: .reference)
                 row("Price (£)", placeholder: "Optional", text: $model.priceText, focus: .price)
                     .keyboardType(.decimalPad)
                     .accessibilityLabel("Price")
@@ -233,9 +230,6 @@ struct AddWatchForm: View {
         Section {
             ForEach($model.specs) { $spec in
                 specRow($spec)
-                if !spec.isCustom {
-                    pageSuggestions(for: spec.label, unless: .spec(spec.id))
-                }
             }
             Menu {
                 ForEach(model.unusedSpecLabels, id: \.self) { label in
@@ -252,7 +246,7 @@ struct AddWatchForm: View {
             Text("Specs")
         } footer: {
             if model.hasSuggestions {
-                Text("Found on the page, but not for certain. Nothing is saved unless you tap it.")
+                Text("Pills were found on the page, but not for certain. The dark one is used: tap another to use it, tap the dark one to edit it, or \u{00D7} to remove one.")
             }
         }
         .textInputAutocapitalization(.sentences)
@@ -280,18 +274,28 @@ struct AddWatchForm: View {
     }
 
     private func specValueField(_ spec: Binding<EditableSpec>, id: UUID, accessibilityTitle: String) -> some View {
-        TextField("Optional", text: spec.value, axis: .vertical)
-            .lineLimit(1...3)
-            .multilineTextAlignment(.trailing)
-            .focused($focus, equals: .spec(id))
-            .accessibilityLabel(accessibilityTitle)
+        let label = spec.wrappedValue.label
+        return Group {
+            if !spec.wrappedValue.isCustom, model.isSuggested(label) {
+                suggestionPills(for: label, editing: .spec(id))
+            } else {
+                TextField("Optional", text: spec.value, axis: .vertical)
+                    .lineLimit(1...3)
+                    .multilineTextAlignment(.trailing)
+                    .focused($focus, equals: .spec(id))
+                    .accessibilityLabel(accessibilityTitle)
+            }
+        }
     }
 
-    private func row(_ title: String, placeholder: String, text: Binding<String>, focus field: Field, next: Field? = nil) -> some View {
+    /// - Parameter key: the field's name, for a value the page wasn't sure of.
+    private func row(_ title: String, placeholder: String, text: Binding<String>, focus field: Field, next: Field? = nil, field key: String? = nil) -> some View {
         LabeledContent(title) {
             if model.stage == .reading {
                 Text("Reading listing")
                     .redacted(reason: .placeholder)
+            } else if let key, model.isSuggested(key) {
+                suggestionPills(for: key, editing: field)
             } else {
                 TextField(placeholder, text: text)
                     .multilineTextAlignment(.trailing)
@@ -301,6 +305,57 @@ struct AddWatchForm: View {
                     .accessibilityLabel(title)
             }
         }
+    }
+
+    /// The values the page wasn't sure of, where one would be typed. The
+    /// dark pill is the one in use: tap another to use it instead, tap the
+    /// dark one to edit it, or × to drop one.
+    private func suggestionPills(for key: String, editing field: Field) -> some View {
+        let options = model.options(for: key)
+        let current = model.value(of: key)
+        let pills = HStack(spacing: Space.xs) {
+            ForEach(options, id: \.self) { option in
+                suggestionPill(option, key: key, inUse: option == current, editing: field)
+            }
+        }
+        return ViewThatFits(in: .horizontal) {
+            pills
+            ScrollView(.horizontal) { pills }
+                .scrollIndicators(.hidden)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private func suggestionPill(_ option: String, key: String, inUse: Bool, editing field: Field) -> some View {
+        HStack(spacing: 6) {
+            Button {
+                if inUse {
+                    model.keepSuggestion(key)
+                    focus = field
+                } else {
+                    model.pick(option, for: key)
+                }
+            } label: {
+                Text(option)
+                    .lineLimit(1)
+                    .foregroundStyle(inUse ? Theme.onInk : Theme.ink)
+            }
+            .accessibilityHint(inUse ? "Edit" : "Use this")
+            .accessibilityAddTraits(inUse ? .isSelected : [])
+            Button {
+                model.removeOption(option, for: key)
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(inUse ? Theme.onInk.opacity(0.7) : Theme.inkTertiary)
+            }
+            .accessibilityLabel("Remove \(option)")
+        }
+        .buttonStyle(.borderless)
+        .font(Typeface.label)
+        .padding(.leading, Space.sm)
+        .padding(.trailing, Space.xs)
+        .frame(minHeight: 32)
+        .background(Capsule().fill(inUse ? Theme.ink : Theme.well))
     }
 
     private var typingMatches: [WatchCatalog.Match] {
@@ -328,32 +383,6 @@ struct AddWatchForm: View {
             }
             .scrollIndicators(.hidden)
             .id(Self.typingSuggestionsID)
-        }
-    }
-
-    /// Values the page gave for an empty field it wasn't clear about. Out of
-    /// the way while the field is being typed in.
-    @ViewBuilder
-    private func pageSuggestions(for field: String, unless typing: Field) -> some View {
-        let values = focus == typing ? [] : model.suggestions(for: field)
-        if !values.isEmpty {
-            HStack(spacing: Space.xs) {
-                Text("From the page")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize()
-                ScrollView(.horizontal) {
-                    HStack(spacing: Space.xs) {
-                        ForEach(values, id: \.self) { value in
-                            ChipButton(title: value, flat: true) {
-                                model.use(value, for: field)
-                            }
-                            .accessibilityLabel("Use \(value) for \(field)")
-                        }
-                    }
-                }
-                .scrollIndicators(.hidden)
-            }
         }
     }
 

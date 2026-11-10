@@ -65,9 +65,10 @@ final class AddWatchModel {
     var reference = ""
     var notes = ""
     var specs = EditableSpec.merging([])
-    /// Values the page gave for fields it wasn't clear about, keyed by field
-    /// or spec label. Never saved unless the user picks one.
-    var suggestions: [String: [String]] = [:]
+    /// Values the page gave that it wasn't sure of, by field or spec label.
+    /// The field holds one of them, the first unless another is picked, and
+    /// they show as pills until the user edits the field or removes them.
+    var suggested: [String: [String]] = [:]
     /// Pounds, as typed.
     var priceText = ""
     /// "$1,650 converted", or the original price when no rate was available.
@@ -176,19 +177,42 @@ final class AddWatchModel {
         specs.append(EditableSpec(label: label ?? "", value: "", isCustom: label == nil))
     }
 
-    /// What the page offers for a field, while the field is empty.
-    func suggestions(for field: String) -> [String] {
-        guard value(of: field).trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
-        return suggestions[field] ?? []
+    /// True while a field still holds one of the values the page wasn't sure of.
+    func isSuggested(_ field: String) -> Bool {
+        guard let options = suggested[field] else { return false }
+        return options.contains(value(of: field))
+    }
+
+    /// The values to choose between, while the field holds one of them.
+    func options(for field: String) -> [String] {
+        isSuggested(field) ? suggested[field] ?? [] : []
     }
 
     var hasSuggestions: Bool {
-        suggestions.keys.contains { !suggestions(for: $0).isEmpty }
+        suggested.keys.contains(where: isSuggested)
     }
 
-    /// Puts a value the page offered into its field.
-    func use(_ value: String, for field: String) {
+    /// Uses another of the values the page gave.
+    func pick(_ option: String, for field: String) {
         Haptics.tick()
+        set(field, to: option)
+    }
+
+    /// Keeps the value in the field, as if typed.
+    func keepSuggestion(_ field: String) {
+        suggested[field] = nil
+    }
+
+    /// Drops one of the values. If it was the one in use, the next takes its place.
+    func removeOption(_ option: String, for field: String) {
+        Haptics.tick()
+        var options = suggested[field] ?? []
+        options.removeAll { $0 == option }
+        if value(of: field) == option { set(field, to: options.first ?? "") }
+        suggested[field] = options.isEmpty ? nil : options
+    }
+
+    private func set(_ field: String, to value: String) {
         switch field {
         case "Brand": brand = value
         case "Model": model = value
@@ -200,10 +224,9 @@ final class AddWatchModel {
                 specs.append(EditableSpec(label: field, value: value))
             }
         }
-        suggestions[field] = nil
     }
 
-    private func value(of field: String) -> String {
+    func value(of field: String) -> String {
         switch field {
         case "Brand": brand
         case "Model": model
@@ -253,11 +276,13 @@ final class AddWatchModel {
         priceText = PriceFormatter.editingText(pence: draft.price?.pence)
         priceNote = draft.priceNote
         specs = EditableSpec.merging(draft.specs)
-        // A spec the page offered values for gets a row to show them under.
-        for label in SpecNormalizer.labels where draft.suggestions[label] != nil && !specs.contains(where: { $0.label == label }) {
-            specs.append(EditableSpec(label: label, value: ""))
+        // What the page wasn't sure of goes into the empty field it's for.
+        suggested = [:]
+        for (field, values) in draft.suggestions.sorted(by: { $0.key < $1.key }) {
+            guard let first = values.first, value(of: field).isEmpty else { continue }
+            set(field, to: first)
+            suggested[field] = values
         }
-        suggestions = draft.suggestions
         photos = loaded
         visiblePhotoID = loaded.first?.id
         photosLoading = false
