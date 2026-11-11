@@ -65,10 +65,6 @@ final class AddWatchModel {
     var reference = ""
     var notes = ""
     var specs = EditableSpec.merging([])
-    /// Values the page gave that it wasn't sure of, by field or spec label.
-    /// The field holds one of them, the first unless another is picked, and
-    /// they show as pills until the user edits the field or removes them.
-    var suggested: [String: [String]] = [:]
     /// Pounds, as typed.
     var priceText = ""
     /// "$1,650 converted", or the original price when no rate was available.
@@ -87,8 +83,13 @@ final class AddWatchModel {
     /// The slower readers are still going through the page.
 
     let isExtension: Bool
+    /// The watch being read again from its page. Saving updates it in place.
+    let updating: Watch?
+    var isUpdating: Bool { updating != nil }
 
     @ObservationIgnored private var draft = ListingDraft()
+    /// The updated watch's own photo, offered first so it can be kept.
+    @ObservationIgnored private var currentCoverID: UUID?
     @ObservationIgnored private var startTask: Task<Void, Never>?
     @ObservationIgnored private var finished = false
     @ObservationIgnored var hostView: UIView?
@@ -98,12 +99,15 @@ final class AddWatchModel {
     /// - Parameters:
     ///   - context: the store to save into.
     ///   - boxID: the box to offer first.
+    ///   - updating: a saved watch to read again from its page, instead of adding one.
     ///   - finish: called when the sheet should close, with "Saved" or similar if a watch was saved.
-    init(context: ModelContext, isExtension: Bool, boxID: UUID? = nil, finish: @escaping (_ savedMessage: String?) -> Void) {
+    init(context: ModelContext, isExtension: Bool, boxID: UUID? = nil, updating: Watch? = nil, finish: @escaping (_ savedMessage: String?) -> Void) {
         self.context = context
         self.isExtension = isExtension
+        self.updating = updating
         self.onFinish = finish
-        loadBoxes(preferred: boxID)
+        loadBoxes(preferred: updating?.box?.id ?? boxID)
+        if let updating { notes = updating.notes }
     }
 
     var canSave: Bool { stage == .ready && !photosLoading && (!isManual || hasDetails) }
@@ -177,64 +181,6 @@ final class AddWatchModel {
         specs.append(EditableSpec(label: label ?? "", value: "", isCustom: label == nil))
     }
 
-    /// True while a field still holds one of the values the page wasn't sure of.
-    func isSuggested(_ field: String) -> Bool {
-        guard let options = suggested[field] else { return false }
-        return options.contains(value(of: field))
-    }
-
-    /// The values to choose between, while the field holds one of them.
-    func options(for field: String) -> [String] {
-        isSuggested(field) ? suggested[field] ?? [] : []
-    }
-
-    var hasSuggestions: Bool {
-        suggested.keys.contains(where: isSuggested)
-    }
-
-    /// Uses another of the values the page gave.
-    func pick(_ option: String, for field: String) {
-        Haptics.tick()
-        set(field, to: option)
-    }
-
-    /// Keeps the value in the field, as if typed.
-    func keepSuggestion(_ field: String) {
-        suggested[field] = nil
-    }
-
-    /// Drops one of the values. If it was the one in use, the next takes its place.
-    func removeOption(_ option: String, for field: String) {
-        Haptics.tick()
-        var options = suggested[field] ?? []
-        options.removeAll { $0 == option }
-        if value(of: field) == option { set(field, to: options.first ?? "") }
-        suggested[field] = options.isEmpty ? nil : options
-    }
-
-    private func set(_ field: String, to value: String) {
-        switch field {
-        case "Brand": brand = value
-        case "Model": model = value
-        case "Reference": reference = value
-        default:
-            if let index = specs.firstIndex(where: { $0.label == field }) {
-                specs[index].value = value
-            } else {
-                specs.append(EditableSpec(label: field, value: value))
-            }
-        }
-    }
-
-    func value(of field: String) -> String {
-        switch field {
-        case "Brand": brand
-        case "Model": model
-        case "Reference": reference
-        default: specs.first { $0.label == field }?.value ?? ""
-        }
-    }
-
     /// Fills in a suggestion. A brand on its own leaves any model typed so far.
     func apply(_ match: WatchCatalog.Match) {
         Haptics.tick()
@@ -261,11 +207,18 @@ final class AddWatchModel {
             Task { await LinkPreviewFallback.fetch(link) }
         } : nil
         async let fetched = ImageFetcher.photos(from: reading.draft.imageURLs, referer: reading.draft.sourceURL)
-        let found = await ExtractionPipeline.enrich(reading, preview: await linkPreview?.value)
+        var found = await ExtractionPipeline.enrich(reading, preview: await linkPreview?.value)
         var loaded = await fetched
         if loaded.isEmpty, let extra = await linkPreview?.value?.imageData,
            let photo = await ImageFetcher.preparedPhoto(from: extra) {
             loaded = [photo]
+        }
+        if let updating {
+            Self.keep(updating, where: &found)
+            if let data = updating.coverData, let current = await ImageFetcher.preparedPhoto(from: data) {
+                currentCoverID = current.id
+                loaded.insert(current, at: 0)
+            }
         }
         guard !Task.isCancelled else { return }
 
@@ -276,17 +229,28 @@ final class AddWatchModel {
         priceText = PriceFormatter.editingText(pence: draft.price?.pence)
         priceNote = draft.priceNote
         specs = EditableSpec.merging(draft.specs)
-        // What the page wasn't sure of goes into the empty field it's for.
-        suggested = [:]
-        for (field, values) in draft.suggestions.sorted(by: { $0.key < $1.key }) {
-            guard let first = values.first, value(of: field).isEmpty else { continue }
-            set(field, to: first)
-            suggested[field] = values
-        }
         photos = loaded
         visiblePhotoID = loaded.first?.id
         photosLoading = false
         stage = .ready
+    }
+
+    /// What the page says replaces what was saved. What it doesn't say,
+    /// such as a spec typed in by hand, stays.
+    static func keep(_ watch: Watch, where d: inout ListingDraft) {
+        if d.brand.isEmpty { d.brand = watch.brand }
+        if d.model.isEmpty { d.model = watch.model }
+        if d.reference.isEmpty { d.reference = watch.reference }
+        if d.price == nil, let pence = watch.pricePence {
+            d.price = Money(amount: Decimal(pence) / 100, currency: "GBP")
+            if let amount = watch.originalAmount, let currency = watch.originalCurrency {
+                d.originalPrice = Money(amount: Decimal(amount), currency: currency)
+            }
+        }
+        let labels = Set(d.specs.map { $0.label.lowercased() })
+        d.specs += watch.specs.filter { !labels.contains($0.label.lowercased()) }
+        if d.sourceURL == nil { d.sourceURL = watch.sourceURL }
+        if d.siteName.isEmpty { d.siteName = watch.sourceSiteName }
     }
 
     // MARK: - Saving
@@ -317,17 +281,31 @@ final class AddWatchModel {
     }
 
     private func commit() async {
-        guard let boxID = selectedBoxID else { return }
+        guard isUpdating || selectedBoxID != nil else { return }
         stage = .saving
         let chosen = photos.first { $0.id == visiblePhotoID } ?? photos.first
-        let cover = await CoverImages.encoding(chosen?.data)
+        let keepsCover = chosen == nil || chosen?.id == currentCoverID
+        let cover = isUpdating && keepsCover ? CoverImages() : await CoverImages.encoding(chosen?.data)
         let edited = editedDraft()
-        let id = boxID
+        let notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let id = selectedBoxID ?? UUID()
         do {
+            if let watch = updating {
+                WatchRecorder.apply(edited, to: watch)
+                watch.notes = notes
+                if !keepsCover { WatchRecorder.setCover(of: watch, to: cover) }
+                try context.save()
+                draft = edited
+                Haptics.saved()
+                stage = .saved
+                try? await Task.sleep(for: .milliseconds(650))
+                finish("Updated")
+                return
+            }
             guard let box = try context.fetch(FetchDescriptor<Box>(predicate: #Predicate { $0.id == id })).first else {
                 throw CocoaError(.coderValueNotFound)
             }
-            try WatchRecorder.save(edited, notes: notes.trimmingCharacters(in: .whitespacesAndNewlines), cover: cover, to: box, in: context)
+            try WatchRecorder.save(edited, notes: notes, cover: cover, to: box, in: context)
             AppGroup.defaults.set(id.uuidString, forKey: SharedKeys.lastBoxID)
             if isExtension { ExternalChanges.markChanged() }
             draft = edited

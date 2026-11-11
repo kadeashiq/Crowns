@@ -17,18 +17,6 @@ struct ListingDraft: Codable, Hashable {
     var pageTitle: String = ""
     var summary: String = ""
     var sources: Set<Source> = []
-    /// Values found on the page for fields it didn't fill, because nothing
-    /// said for certain which was right. Keyed by field or spec label.
-    var suggestions: [String: [String]] = [:]
-
-    /// Offers a value for a field, once, and no more than three per field.
-    mutating func suggest(_ value: String, for field: String) {
-        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        var values = suggestions[field] ?? []
-        guard !value.isEmpty, values.count < 3, !values.contains(where: { $0.caseInsensitiveCompare(value) == .orderedSame }) else { return }
-        values.append(value)
-        suggestions[field] = values
-    }
 
     enum Source: String, Codable, Hashable {
         case jsonLD, shopify, openGraph, microdata, pageSpecs, heuristics, linkPresentation, foundationModels

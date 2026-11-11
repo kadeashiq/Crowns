@@ -9,8 +9,11 @@ struct WatchDetailView: View {
     let onRemove: (Watch) -> Void
 
     @Query(sort: [SortDescriptor(\Box.sortIndex), SortDescriptor(\Box.createdAt)]) private var boxes: [Box]
+    @Environment(\.modelContext) private var context
     @State private var editing = false
     @State private var confirmRemove = false
+    /// Reading the watch's page again, in the add form.
+    @State private var updating: AddWatchModel?
 
     var body: some View {
         ScrollView {
@@ -33,9 +36,38 @@ struct WatchDetailView: View {
             EditWatchSheet(watch: watch)
                 .crownsSheet()
         }
+        .sheet(isPresented: isUpdating) {
+            if let updating {
+                NavigationStack {
+                    AddWatchForm(model: updating)
+                }
+                .tint(Theme.ink)
+                .presentationDragIndicator(.visible)
+            }
+        }
         .confirmationDialog("Are you sure you want to remove this watch?", isPresented: $confirmRemove, titleVisibility: .visible) {
             Button("Remove", role: .destructive) { onRemove(watch) }
         }
+    }
+
+    /// Swiping the form away stops the reading and leaves the watch as it was.
+    private var isUpdating: Binding<Bool> {
+        Binding(
+            get: { updating != nil },
+            set: { showing in
+                guard !showing else { return }
+                updating?.stop()
+                updating = nil
+            }
+        )
+    }
+
+    private func readAgain(_ url: URL) {
+        let model = AddWatchModel(context: context, isExtension: false, updating: watch) { _ in
+            updating = nil
+        }
+        updating = model
+        model.start(.link(url))
     }
 
     // MARK: - Info
@@ -113,15 +145,25 @@ struct WatchDetailView: View {
             }
 
             if let url = watch.sourceURL {
-                Link(destination: url) {
-                    HStack(spacing: 6) {
-                        Text(watch.sourceSiteName.isEmpty ? (url.host() ?? "Source") : watch.sourceSiteName)
-                        Image(systemName: "arrow.up.right")
-                            .font(Typeface.micro)
+                HStack(spacing: Space.xs) {
+                    Link(destination: url) {
+                        HStack(spacing: 6) {
+                            Text(watch.sourceSiteName.isEmpty ? (url.host() ?? "Source") : watch.sourceSiteName)
+                            Image(systemName: "arrow.up.right")
+                                .font(Typeface.micro)
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
+                    .buttonStyle(.pill(.secondary))
+
+                    Button {
+                        readAgain(url)
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.circle(diameter: 54))
+                    .accessibilityLabel("Update from page")
                 }
-                .buttonStyle(.pill(.secondary))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -72,6 +72,42 @@ struct ListingInterpreterTests {
         #expect(d.imageURLs.count == 1)
     }
 
+    /// Captured on rolex.com after going from the Submariner (124060) to the
+    /// Submariner Date inside the site: the page still holds the first watch's
+    /// product data, ahead of the new one's.
+    @Test func inSiteNavigationReadsTheWatchOnScreen() throws {
+        let d = ListingInterpreter.interpret(try fixture("rolex-after-in-site-navigation"))
+        #expect(d.brand == "Rolex")
+        #expect(d.model == "Submariner Date")
+        #expect(d.reference == "126610LN")
+        #expect(d.price == Money(amount: 9500, currency: "GBP"))
+        #expect(d.sourceURL?.absoluteString == "https://www.rolex.com/en-gb/watches/submariner/m126610ln-0001")
+        #expect(d.imageURLs.allSatisfy { !$0.absoluteString.contains("m124060") })
+    }
+
+    @Test func productDataLeftFromAnotherPageIsIgnored() throws {
+        let json = """
+        {"url":"https://shop.example/watches/b-200","canonical":"https://shop.example/watches/a-100",
+         "meta":{"og:title":"Tudor Pelagos 39"},
+         "jsonld":[{"@type":"Product","name":"Tudor Black Bay 58","url":"https://shop.example/watches/a-100",
+          "offers":{"price":"3,000","priceCurrency":"GBP"}}]}
+        """
+        let d = ListingInterpreter.interpret(try #require(PageSnapshot.decode(json)))
+        #expect(d.model == "Pelagos 39")
+        #expect(d.price == nil)
+        #expect(d.sourceURL?.absoluteString == "https://shop.example/watches/b-200")
+    }
+
+    @Test func productPointingAtTheHomePageStillCounts() throws {
+        let json = """
+        {"url":"https://shop.example/watches/b-200",
+         "jsonld":[{"@type":"Product","name":"Tudor Pelagos 39","url":"https://shop.example/",
+          "offers":{"price":"4,000","priceCurrency":"GBP"}}]}
+        """
+        let d = ListingInterpreter.interpret(try #require(PageSnapshot.decode(json)))
+        #expect(d.price == Money(amount: 4000, currency: "GBP"))
+    }
+
     @Test func aggregateOfferAndImageObject() throws {
         let json = """
         {"url":"https://shop.example/p/1","jsonld":[{"@type":"Product","name":"Grand Seiko SBGA211 Snowflake",
@@ -233,30 +269,59 @@ struct SentenceSpecTests {
     }
 }
 
-@Suite("Page suggestions")
-struct PageSuggestionTests {
-    @Test func twoCaseSizesAreLeftToChoose() {
-        let reading = SpecNormalizer.reading(from: SpecTable([]), title: "", text: "Available as a 38mm case or a 41mm case")
-        #expect(!reading.specs.contains { $0.label == "Case size" })
-        #expect(reading.suggestions["Case size"] == ["38 mm", "41 mm"])
+@Suite("Page specs")
+struct PageSpecTests {
+    private func value(_ specs: [Spec], _ label: String) -> String? {
+        specs.first { $0.label == label }?.value
     }
 
-    @Test func oneSizeSaidTwiceIsCertain() {
-        let reading = SpecNormalizer.reading(from: SpecTable([]), title: "", text: "36mm case width\nThe 36mm case suits most wrists")
-        #expect(reading.specs.first { $0.label == "Case size" }?.value == "36 mm")
-        #expect(reading.suggestions.isEmpty)
+    /// Kiwame Tokyo's dimensions line, where the thickness pattern could also reach the lug-to-lug.
+    @Test func theMostSpecificMatchWins() {
+        let line = "Dimensions ・Ø38mm diameter ・9.5mm case thickness ・46mm lug-to-lug ・Strap width 20-16mm (lug-buckle) ・Fits wrists from 16 cm to 21 cm"
+        let specs = SpecNormalizer.specs(from: SpecTable([]), title: "", text: line)
+        #expect(value(specs, "Case size") == "38 mm")
+        #expect(value(specs, "Thickness") == "9.5 mm")
+        #expect(value(specs, "Lug to lug") == "46 mm")
+        #expect(value(specs, "Lug width") == "20 mm")
+    }
+
+    @Test func theRestOfThePageCountsWhenItSaysOneThing() {
+        let page = "Powered by a Japanese-made Miyota 9039 automatic movement, with 100 meters of water resistance and a navy calfskin leather strap."
+        let specs = SpecNormalizer.specs(from: SpecTable([]), title: "", pageText: page)
+        #expect(value(specs, "Movement") == "Miyota 9039")
+        #expect(value(specs, "Water resistance") == "100 meters")
+        #expect(value(specs, "Bracelet") == "Navy calfskin leather strap")
+    }
+
+    @Test func theRestOfThePageIsIgnoredWhenItDisagrees() {
+        let page = "This 38mm case pairs well with the 41mm case of its sibling."
+        let specs = SpecNormalizer.specs(from: SpecTable([]), title: "", pageText: page)
+        #expect(value(specs, "Case size") == nil)
     }
 
     @Test func aHeadingIsNotACalibre() {
         let table = SpecTable([["Calibre", "At heart"], ["Movement", "Calibre at heart"]])
-        let reading = SpecNormalizer.reading(from: table, title: "", calibres: ["Jaeger-LeCoultre Caliber 868", "Calibre 868 in detail", "Caliber 925"])
-        #expect(!reading.specs.contains { $0.label == "Calibre" || $0.label == "Movement" })
-        #expect(reading.suggestions["Calibre"] == ["Calibre 868", "Calibre 925"])
+        let specs = SpecNormalizer.specs(from: table, title: "", calibres: ["Jaeger-LeCoultre Caliber 868", "Caliber 925"])
+        #expect(value(specs, "Movement") == nil)
+        #expect(value(specs, "Calibre") == "Calibre 868")
     }
 
-    @Test func oneNamedCalibreFillsTheField() {
-        let reading = SpecNormalizer.reading(from: SpecTable([]), title: "", calibres: ["Jaeger-LeCoultre Caliber 925"])
-        #expect(reading.specs.first { $0.label == "Calibre" }?.value == "Calibre 925")
+    @Test func strapLabelsFillBraceletAndLugWidth() {
+        let table = SpecTable([["Strap material", "Black leather"], ["Strap width", "20 mm"]])
+        let specs = SpecNormalizer.specs(from: table, title: "")
+        #expect(value(specs, "Bracelet") == "Black leather")
+        #expect(value(specs, "Lug width") == "20 mm")
+    }
+
+    @Test func aShopThatIsTheBrandIsNamedForIt() {
+        #expect(ListingInterpreter.brandSpelled(by: "kiwametokyo.com", in: "KIWAME TOKYO ASAKUSA") == "Kiwame Tokyo")
+        #expect(ListingInterpreter.brandSpelled(by: "watchfinder.co.uk", in: "Watches of Switzerland") == nil)
+    }
+
+    @Test func modelFallbackOnlyKeepsValuesThatLookRight() {
+        let page = "The watch offers 100 meters of water resistance."
+        #expect(FoundationModelsFallback.usable("100 meters of water resistance", for: "Water resistance", in: page) == "100 meters")
+        #expect(FoundationModelsFallback.usable("46 mm", for: "Water resistance", in: page) == nil)
     }
 
     @Test func labelsBrandsUseForTheSameSpec() {

@@ -4,10 +4,9 @@ import FoundationModels
 #endif
 
 /// Last resort for pages with no structured data: Apple's on-device model
-/// reads the page text for what the heuristics missed. Its answers are only
-/// offered as suggestions, and only when they appear on the page word for
-/// word; anything found earlier wins. A price is the exception: one stated on
-/// the page fills the empty price.
+/// reads the page text for what the heuristics missed. Its answers fill only
+/// empty fields, and only when they appear on the page word for word and
+/// look like what the field holds. Anything found earlier wins.
 enum FoundationModelsFallback {
     /// Loads the model ahead of the first question.
     static func prewarm() {
@@ -24,20 +23,28 @@ enum FoundationModelsFallback {
         #endif
     }
 
-    /// Suggests specs the page reading missed. Free and on-device, on iPhones
+    /// Fills specs the page reading missed. Free and on-device, on iPhones
     /// with Apple Intelligence; other devices simply skip this step.
     static func fillSpecs(_ draft: inout ListingDraft, text: String) async {
         #if canImport(FoundationModels)
         guard let guess = await specsGuess(text: text) else { return }
         var used = false
         for (label, value) in guess.fields {
-            let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !draft.specs.contains(where: { $0.label == label }), isGrounded(value, in: text) else { continue }
-            draft.suggest(value, for: label)
+            guard !draft.specs.contains(where: { $0.label == label }), let value = usable(value, for: label, in: text) else { continue }
+            draft.specs = SpecNormalizer.ordered(draft.specs + [Spec(label: label, value: value)])
             used = true
         }
         if used { draft.sources.insert(.foundationModels) }
         #endif
+    }
+
+    /// A spec the model read, if the page says it and it's the right kind of
+    /// value, cut to the measurement where there is one ("100 meters" from
+    /// "100 meters of water resistance").
+    static func usable(_ raw: String, for label: String, in text: String) -> String? {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isGrounded(value, in: text), SpecNormalizer.fits(value, label: label) else { return nil }
+        return SpecNormalizer.measurement(in: value, for: label) ?? value
     }
 
     /// True only if what the model said really is on the page, so it can't
@@ -148,21 +155,20 @@ extension FoundationModelsFallback {
 
     static func apply(_ guess: WatchListingGuess, to d: inout ListingDraft, page: String) {
         var used = false
-        func offer(_ value: String, for field: String) {
-            guard isGrounded(value, in: page) else { return }
-            d.suggest(value, for: field)
+        // Only a brand the app knows: a model name read as the brand looks just as sure.
+        let brand = guess.brand.trimmingCharacters(in: .whitespacesAndNewlines)
+        if d.brand.isEmpty, let known = WatchBrands.canonical(brand), isGrounded(brand, in: page) {
+            d.brand = known
             used = true
         }
-        let brand = guess.brand.trimmingCharacters(in: .whitespacesAndNewlines)
-        if d.brand.isEmpty, !brand.isEmpty {
-            offer(WatchBrands.canonical(brand) ?? brand, for: "Brand")
-        }
-        if d.reference.isEmpty, let ref = ReferenceDetector.clean(guess.reference), ref.contains(where: \.isNumber) {
-            offer(ref, for: "Reference")
+        if d.reference.isEmpty, let ref = ReferenceDetector.clean(guess.reference), ReferenceDetector.isReferenceLike(ref), isGrounded(ref, in: page) {
+            d.reference = ref
+            used = true
         }
         let model = WatchBrands.strip(d.brand.isEmpty ? brand : d.brand, from: guess.model).trimmingCharacters(in: .whitespacesAndNewlines)
-        if d.model.isEmpty, !model.isEmpty, model.count <= 60 {
-            offer(model, for: "Model")
+        if d.model.isEmpty, !model.isEmpty, model.count <= 60, isGrounded(model, in: page) {
+            d.model = model
+            used = true
         }
         let code = PriceParser.normalizedCode(guess.currency)
         if d.price == nil, guess.price >= 1, guess.price < 100_000_000, code.count == 3, statesAmount(guess.price, in: page) {
@@ -172,10 +178,12 @@ extension FoundationModelsFallback {
         if d.specs.isEmpty {
             for s in guess.specs.prefix(8) {
                 let label = SpecNormalizer.label(for: s.label.trimmingCharacters(in: .whitespacesAndNewlines))
-                let value = s.value.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !label.isEmpty, label.count <= 30, value.count <= 80 else { continue }
-                offer(value, for: label)
+                guard SpecNormalizer.labels.contains(label), !d.specs.contains(where: { $0.label == label }),
+                      let value = usable(s.value, for: label, in: page) else { continue }
+                d.specs.append(Spec(label: label, value: value))
+                used = true
             }
+            d.specs = SpecNormalizer.ordered(d.specs)
         }
         if used { d.sources.insert(.foundationModels) }
     }

@@ -9,7 +9,7 @@ enum ListingInterpreter {
     static func interpret(_ s: PageSnapshot) -> ListingDraft {
         var d = ListingDraft()
         let meta = s.meta ?? [:]
-        let product = bestProduct(in: s.jsonld ?? [])
+        let product = bestProduct(in: s.jsonld ?? [], page: s.pageURL)
         let shopify: JSONValue? = (s.shopify?.isObject == true) ? s.shopify : nil
         let micro = s.microdata ?? [:]
 
@@ -31,15 +31,13 @@ enum ListingInterpreter {
         d.model = model(table: table, product: product, name: name, h1: s.h1, title: s.title, siteName: d.siteName, brand: d.brand, reference: d.reference)
         d.price = price(product: product, shopify: shopify, micro: micro, meta: meta, priceTexts: s.priceTexts ?? [], s: s)
         d.summary = String((first(product?["description"]?.string, shopify?["description"]?.string, meta["og:description"], meta["description"]) ?? "").prefix(600))
-        let specs = SpecNormalizer.reading(from: table, title: name, text: ([name] + (s.specLines ?? []) + [d.summary]).joined(separator: "\n"), calibres: s.calibres ?? [])
-        d.specs = specs.specs
-        for (label, values) in specs.suggestions {
-            for value in values { d.suggest(value, for: label) }
-        }
-        // A reference-shaped code in the page text that nothing labels as one.
-        if d.reference.isEmpty, let text = s.text, let code = ReferenceDetector.best(in: String(text.prefix(1200))), ReferenceDetector.score(code) >= 3 {
-            d.suggest(code, for: "Reference")
-        }
+        d.specs = SpecNormalizer.specs(
+            from: table,
+            title: name,
+            text: ([name] + (s.specLines ?? []) + [d.summary]).joined(separator: "\n"),
+            pageText: s.text ?? "",
+            calibres: s.calibres ?? []
+        )
         d.imageURLs = images(product: product, shopify: shopify, s: s, reference: d.reference)
 
         if product != nil { d.sources.insert(.jsonLD) }
@@ -68,7 +66,10 @@ enum ListingInterpreter {
 
     // MARK: - Product node
 
-    private static func bestProduct(in nodes: [JSONValue]) -> JSONValue? {
+    /// Sites that change watch without loading a new page (Rolex, for one)
+    /// keep the last watch's product data and add the new one after it, so a
+    /// product that names another page on the same site isn't this watch.
+    private static func bestProduct(in nodes: [JSONValue], page: URL?) -> JSONValue? {
         func score(_ n: JSONValue) -> Int {
             var s = 0
             if n["offers"] != nil || n["hasVariant"]?.list.first?["offers"] != nil { s += 3 }
@@ -77,7 +78,35 @@ enum ListingInterpreter {
             if n["name"] != nil { s += 1 }
             return s
         }
-        return nodes.filter(\.isObject).max { score($0) < score($1) }
+        let products = nodes.filter(\.isObject).filter { node in
+            guard let page else { return true }
+            let named = ([node["url"], node["@id"]] + (node["offers"]?.list.map { $0["url"] } ?? []))
+                .compactMap { $0?.string.flatMap(URL.init(string:)) }
+            return named.contains { isSamePage($0, as: page) } || !named.contains { isOtherPage($0, than: page) }
+        }
+        return products.max { score($0) < score($1) }
+    }
+
+    /// The last part of a page's path, which names the watch: "m126610ln-0001",
+    /// "4600e-000a-h177" (".html" dropped), "falcon" from "/collections/x/products/falcon".
+    private static func pageName(_ url: URL) -> String {
+        let name = url.path().split(separator: "/").last.map(String.init) ?? ""
+        return (name.split(separator: ".").first.map(String.init) ?? name).lowercased()
+    }
+
+    private static func sameSite(_ a: URL, _ b: URL) -> Bool {
+        func site(_ u: URL) -> String? { u.host()?.lowercased().replacingOccurrences(of: "www.", with: "") }
+        return site(a) != nil && site(a) == site(b)
+    }
+
+    private static func isSamePage(_ url: URL, as page: URL) -> Bool {
+        sameSite(url, page) && pageName(url) == pageName(page)
+    }
+
+    /// Another page on the same site. The home page doesn't count: some sites
+    /// point every product at it.
+    private static func isOtherPage(_ url: URL, than page: URL) -> Bool {
+        sameSite(url, page) && !pageName(url).isEmpty && pageName(url) != pageName(page)
     }
 
     // MARK: - Fields
@@ -102,7 +131,27 @@ enum ListingInterpreter {
         // An unknown brand, e.g. a microbrand. Shops often put their own name
         // in "brand", so skip anything that is just the site name.
         let site = SpecTable.key(siteName)
-        return candidates.first { SpecTable.key($0) != site && !site.contains(SpecTable.key($0)) } ?? ""
+        if let other = candidates.first(where: { SpecTable.key($0) != site && !site.contains(SpecTable.key($0)) }) {
+            return other
+        }
+        // Unless the shop is the brand: its web address spells the name
+        // ("kiwametokyo.com" for "KIWAME TOKYO ASAKUSA").
+        return host.flatMap { brandSpelled(by: $0, in: siteName) } ?? ""
+    }
+
+    /// The words at the start of a site name that its web address spells out.
+    static func brandSpelled(by host: String, in siteName: String) -> String? {
+        let label = host.lowercased().replacingOccurrences(of: "www.", with: "").split(separator: ".").first.map(String.init) ?? ""
+        guard label.count >= 4 else { return nil }
+        var spelled = ""
+        var words: [Substring] = []
+        for word in siteName.split(separator: " ") {
+            spelled += word.lowercased().filter { $0.isLetter || $0.isNumber }
+            words.append(word)
+            if spelled == label { return readable(words.joined(separator: " ")) }
+            if !label.hasPrefix(spelled) { return nil }
+        }
+        return nil
     }
 
     private static func reference(table: SpecTable, product: JSONValue?, micro: [String: String], name: String, allTitles: String, text: String?) -> String {
@@ -117,6 +166,10 @@ enum ListingInterpreter {
             return v
         }
         if let v = ReferenceDetector.best(in: name) ?? ReferenceDetector.best(in: allTitles) {
+            return v
+        }
+        // Nothing in the title: brands that sell direct often use the reference as the SKU.
+        if let v = ReferenceDetector.clean(product?["sku"]?.string ?? micro["sku"]), ReferenceDetector.isReferenceLike(v) {
             return v
         }
         // Brand sites often print the reference near the top of the page but
@@ -288,8 +341,9 @@ enum ListingInterpreter {
 
     private static func sourceURL(for s: PageSnapshot) -> URL? {
         let page = s.pageURL
+        // A canonical link left over from the last watch names another page.
         if let canonical = s.canonical.flatMap(URL.init(string:)), canonical.host() != nil,
-           canonical.host() == page?.host() || page == nil {
+           page.map({ canonical.host() == $0.host() && !isOtherPage(canonical, than: $0) }) ?? true {
             return canonical
         }
         guard let page, var c = URLComponents(url: page, resolvingAgainstBaseURL: false) else { return page }

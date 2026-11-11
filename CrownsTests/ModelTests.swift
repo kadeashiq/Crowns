@@ -221,30 +221,98 @@ struct ModelTests {
         #expect(context.changedModelsArray.count == 1)
     }
 
-    @Test func valuesThePageWasUnsureOfCanBePickedOrRemoved() throws {
+    @Test func eachShareStartsWithAnEmptyForm() async throws {
         let context = try memoryContext()
-        let model = AddWatchModel(context: context, isExtension: false) { _ in }
-        model.specs = [EditableSpec(label: "Calibre", value: "Calibre 868")]
-        model.suggested = ["Calibre": ["Calibre 868", "Calibre 925"]]
-        #expect(model.options(for: "Calibre") == ["Calibre 868", "Calibre 925"])
+        let first = AddWatchModel(context: context, isExtension: true) { _ in }
+        first.brand = "Rolex"
+        first.model = "Submariner"
+        first.notes = "First"
+        first.stage = .ready
+        await first.save()
 
-        model.pick("Calibre 925", for: "Calibre")
-        #expect(model.value(of: "Calibre") == "Calibre 925")
-
-        model.removeOption("Calibre 925", for: "Calibre")
-        #expect(model.value(of: "Calibre") == "Calibre 868")
-        model.removeOption("Calibre 868", for: "Calibre")
-        #expect(model.value(of: "Calibre").isEmpty)
-        #expect(!model.hasSuggestions)
+        let second = AddWatchModel(context: context, isExtension: true) { _ in }
+        #expect(second.brand.isEmpty)
+        #expect(second.model.isEmpty)
+        #expect(second.notes.isEmpty)
+        #expect(second.photos.isEmpty)
+        #expect(second.specs.allSatisfy { $0.value.isEmpty })
     }
 
-    @Test func editingAnUnsureValueMakesItTheUsers() throws {
+    @Test func readingAgainKeepsWhatThePageDoesNotSay() throws {
+        let watch = Watch()
+        watch.brand = "Tudor"
+        watch.model = "Black Bay"
+        watch.pricePence = 300_000
+        watch.specs = [Spec(label: "Case size", value: "41 mm"), Spec(label: "Strap", value: "Mine, from a friend")]
+        var page = ListingDraft()
+        page.model = "Black Bay 58"
+        page.specs = [Spec(label: "Case size", value: "39 mm")]
+
+        AddWatchModel.keep(watch, where: &page)
+
+        #expect(page.brand == "Tudor")
+        #expect(page.model == "Black Bay 58")
+        #expect(page.price == Money(amount: 3000, currency: "GBP"))
+        #expect(page.specs.first { $0.label == "Case size" }?.value == "39 mm")
+        #expect(page.specs.first { $0.label == "Strap" }?.value == "Mine, from a friend")
+    }
+
+    @Test func updatingSavesIntoTheSameWatch() async throws {
         let context = try memoryContext()
-        let model = AddWatchModel(context: context, isExtension: false) { _ in }
-        model.reference = "M79030N"
-        model.suggested = ["Reference": ["M79030N"]]
-        model.reference = "M79030N-0001"
-        #expect(!model.isSuggested("Reference"))
+        let box = Box(name: "Collection")
+        context.insert(box)
+        var original = ListingDraft()
+        original.brand = "Tudor"
+        let old = await CoverImages.encoding(square(.red))
+        let watch = try WatchRecorder.save(original, notes: "Birthday", cover: old, to: box, in: context)
+
+        var closed: String?
+        let model = AddWatchModel(context: context, isExtension: false, updating: watch) { closed = $0 }
+        #expect(model.notes == "Birthday")
+        model.brand = "Tudor"
+        model.model = "Pelagos 39"
+        model.priceText = "4,100"
+        let photo = try #require(ImageFetcher.photo(from: square(.blue)))
+        model.photos = [photo]
+        model.visiblePhotoID = photo.id
+        model.stage = .ready
+        model.photosLoading = false
+
+        await model.save()
+
+        let all = try context.fetch(FetchDescriptor<Watch>())
+        #expect(all.count == 1)
+        #expect(watch.model == "Pelagos 39")
+        #expect(watch.pricePence == 410_000)
+        #expect(watch.notes == "Birthday")
+        #expect(watch.box?.id == box.id)
+        #expect(watch.coverData == (await CoverImages.encoding(photo.data)).cover)
+        #expect(closed == "Updated")
+    }
+
+    @Test func updatingWithNoPhotoKeepsTheCover() async throws {
+        let context = try memoryContext()
+        let box = Box(name: "Collection")
+        context.insert(box)
+        let old = await CoverImages.encoding(square(.red))
+        let watch = try WatchRecorder.save(ListingDraft(), cover: old, to: box, in: context)
+
+        let model = AddWatchModel(context: context, isExtension: false, updating: watch) { _ in }
+        model.brand = "Omega"
+        model.stage = .ready
+        model.photosLoading = false
+        await model.save()
+
+        #expect(watch.brand == "Omega")
+        #expect(watch.coverData == old.cover)
+        #expect(watch.thumbnailData == old.thumbnail)
+    }
+
+    private func square(_ color: UIColor) -> Data {
+        UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600)).jpegData(withCompressionQuality: 0.9) { ctx in
+            color.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
+        }
     }
 
     @Test func savingKeepsWhatWasTyped() async throws {

@@ -75,7 +75,7 @@ struct WatchPhotoButtons: View {
 }
 
 /// The system camera. Reports the photo, or nil if it was cancelled.
-private struct CameraPicker: UIViewControllerRepresentable {
+struct CameraPicker: UIViewControllerRepresentable {
     let onFinish: (UIImage?) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }

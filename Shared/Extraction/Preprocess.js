@@ -457,8 +457,12 @@ var CrownsExtractor = (function () {
 
   var JUNK_IMAGE = /(logo|icon|sprite|badge|avatar|flag|payment|placeholder|spinner|loader|pixel|tracking|1x1|blank\.)/i;
   // Parts of a product page that show other things: other products, press,
-  // reviews, pop-ups, colour choices.
-  var NOT_PRODUCT = /(recommend|related|upsell|cross-?sell|also-?like|you-?may|recently|similar|complete-the-look|product-?tile|product-?card|press|review|testimonial|instagram|swatch|payment|newsletter|modal|popup)/i;
+  // reviews, colour choices.
+  var NOT_PRODUCT = /(recommend|related|upsell|cross-?sell|also-?like|you-?may|recently|similar|complete-the-look|product-?tile|product-?card|\bpress\b|review|testimonial|instagram|swatch|payment|newsletter)/i;
+  // Pop-ups, except the product's own zoom view and the links that open it
+  // (Shopify's "product__modal-opener" wraps every gallery photo).
+  var POP_UP = /(modal|popup)/i;
+  var PRODUCT_ZOOM = /(product[-_]*(media|modal|image|photo|gallery)|modal-opener|media-modal)/i;
   // The product's own photos.
   var GALLERY = /(gallery|carousel|slider|swiper|slick|zoom|product-?media|product__media|product-?image|product-?photo|pdp-?image|primary-image|thumbnails?)/i;
   var IMAGE_FILE = /\.(jpe?g|png|webp|avif|heic)(\?|#|$)/i;
@@ -475,6 +479,7 @@ var CrownsExtractor = (function () {
       if (el.getAttribute("role") === "dialog" || el.getAttribute("aria-modal") === "true") return "skip";
       var name = (typeof el.className === "string" ? el.className : "") + " " + (el.id || "");
       if (NOT_PRODUCT.test(name)) return "skip";
+      if (POP_UP.test(name) && !PRODUCT_ZOOM.test(name)) return "skip";
       if (GALLERY.test(name)) gallery = true;
     }
     return gallery ? "gallery" : "page";

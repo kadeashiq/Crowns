@@ -39,7 +39,7 @@ enum SpecNormalizer {
     private static let canon: [(label: String, keys: [String])] = [
         ("Case size", ["case size", "case diameter", "diameter", "case width", "case size (mm)", "case dimensions", "dimension", "dimensions", "size"]),
         ("Thickness", ["thickness", "case thickness", "case depth", "case height", "height", "depth", "thickness (mm)"]),
-        ("Lug width", ["lug width", "lug size", "between lugs", "width between lugs", "lug distance", "strap width", "lugs"]),
+        ("Lug width", ["lug width", "lug size", "between lugs", "width between lugs", "lug distance", "strap width", "strap size", "band width", "bracelet width", "strap width at lugs", "lugs"]),
         ("Lug to lug", ["lug-to-lug", "lug to lug", "lug to lug length", "lug-to-lug length"]),
         ("Movement", ["movement", "movement type", "winding", "mechanism", "type of movement", "energy"]),
         ("Calibre", ["calibre", "caliber", "movement calibre", "movement caliber", "calibre number", "caliber number"]),
@@ -50,7 +50,7 @@ enum SpecNormalizer {
         ("Dial", ["dial colour", "dial color", "dial"]),
         ("Bezel", ["bezel", "bezel material", "bezel type"]),
         ("Crystal", ["crystal", "glass", "crystal material"]),
-        ("Bracelet", ["bracelet", "strap", "band", "band material", "bracelet material", "strap material", "bracelet/strap"]),
+        ("Bracelet", ["bracelet", "strap", "band", "band material", "bracelet material", "strap material", "strap type", "strap colour", "strap color", "bracelet type", "bracelet/strap", "strap/bracelet", "leather", "leather strap", "rubber strap", "watch strap"]),
         ("Weight", ["case weight", "weight", "total product weight (approx.)", "total product weight", "total weight"]),
         ("Water resistance", ["water resistance", "water resistant", "water-resistance", "water resistance rating", "waterproofness", "waterproof"]),
         ("Year", ["year", "year manufactured", "year of manufacture", "production year", "year of production"]),
@@ -83,29 +83,21 @@ enum SpecNormalizer {
             .map(\.element)
     }
 
-    static func specs(from table: SpecTable, title: String, text: String = "") -> [Spec] {
-        reading(from: table, title: title, text: text).specs
-    }
-
-    /// The specs, and the values found for any the page wasn't clear about:
-    /// a measurement stated two different ways, or a labelled value that
-    /// isn't what the label means, is left for the user to pick.
-    /// - Parameter calibres: short lines from the page that name a calibre.
-    static func reading(from table: SpecTable, title: String, text: String = "", calibres: [String] = []) -> (specs: [Spec], suggestions: [String: [String]]) {
+    /// The specs: labelled values first, then ones written as sentences.
+    /// - Parameters:
+    ///   - text: the spec lines and summary, where the first match for a spec is the one.
+    ///   - pageText: the whole page, used only where it states a spec one way.
+    ///   - calibres: short lines from the page that name a calibre.
+    static func specs(from table: SpecTable, title: String, text: String = "", pageText: String = "", calibres: [String] = []) -> [Spec] {
         var out: [Spec] = []
-        var unsure: [String: [String]] = [:]
-        // Labels the page gave a value for that doesn't fit, such as "Calibre: at heart".
-        var misfits: Set<String> = []
         for (label, keys) in canon {
             var value: String?
             for key in keys {
                 guard let v = table.value(key) else { continue }
                 // "Size" alone is often S/M/L; only accept it with a measurement.
                 if key == "size", !v.lowercased().contains("mm") { continue }
-                guard fits(v, label: label) else {
-                    misfits.insert(label)
-                    continue
-                }
+                // A value that isn't what the label means, such as "Calibre: at heart".
+                guard fits(v, label: label) else { continue }
                 value = v
                 break
             }
@@ -126,23 +118,27 @@ enum SpecNormalizer {
         let calibrePattern = #"\b(?:calibre|caliber|cal\.)\s*([A-Z]{0,4}[ \-]?\d[A-Za-z0-9.\-/]*)"#
         for (label, patterns, format) in sentencePatterns + [("Calibre", [calibrePattern], { "Calibre \($0)" })]
         where !out.contains(where: { $0.label == label }) {
-            let source = label == "Calibre" ? calibres.joined(separator: "\n") : text
-            var values: [String] = []
-            for found in captures(patterns, in: source) {
-                let value = format(found.trimmingCharacters(in: CharacterSet(charactersIn: ".-/ ")))
-                if !values.contains(where: { sameMeasure($0, value) }) { values.append(value) }
+            func values(in source: String) -> [String] {
+                var values: [String] = []
+                for found in captures(patterns, in: source) {
+                    let value = format(found.trimmingCharacters(in: CharacterSet(charactersIn: ".-/ ")))
+                    if !values.contains(where: { sameMeasure($0, value) }) { values.append(value) }
+                }
+                return values
             }
-            // One clear value fills the field, unless the page labelled something else as this.
-            if values.count == 1, !misfits.contains(label) {
-                out.append(Spec(label: label, value: values[0]))
-            } else if !values.isEmpty {
-                unsure[label] = Array(values.prefix(3))
+            // The patterns run most specific first, so the first match is the one.
+            if let first = values(in: label == "Calibre" ? calibres.joined(separator: "\n") : text).first {
+                out.append(Spec(label: label, value: first))
+            } else if label != "Calibre" {
+                // The rest of the page can mention other watches, so only a spec it states one way.
+                let elsewhere = values(in: pageText)
+                if elsewhere.count == 1 { out.append(Spec(label: label, value: elsewhere[0])) }
             }
         }
-        if !out.contains(where: { $0.label == "Case size" }), unsure["Case size"] == nil, let size = caseSize(in: title) {
+        if !out.contains(where: { $0.label == "Case size" }), let size = caseSize(in: title) {
             out.append(Spec(label: "Case size", value: size))
         }
-        return (ordered(out), unsure)
+        return ordered(out)
     }
 
     /// What a value has to look like to be the spec its label names.
@@ -166,6 +162,14 @@ enum SpecNormalizer {
         return value.range(of: shape, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
+    /// Just the measurement in a longer value, for specs that are one.
+    static func measurement(in value: String, for label: String) -> String? {
+        guard ["Case size", "Thickness", "Lug width", "Lug to lug", "Water resistance", "Power reserve", "Weight"].contains(label),
+              let shape = shapes[label],
+              let range = value.range(of: shape, options: [.regularExpression, .caseInsensitive]) else { return nil }
+        return String(value[range])
+    }
+
     /// "100 meters" and "100m" say the same thing.
     private static func sameMeasure(_ a: String, _ b: String) -> Bool {
         func number(_ s: String) -> String { String(s.prefix { $0.isNumber || $0 == "." || $0 == " " }).filter { $0 != " " } }
@@ -187,10 +191,11 @@ enum SpecNormalizer {
             #"(?<![\d.])(\d{1,2}(?:\.\d+)?)\s?mm\s+(?:case\s+)?(?:thick|high\b|height|depth)"#,
             #"(?<!crystal )\b(?:thick(?:ness)?|height|depth)"# + labelGap + #"(\d{1,2}(?:\.\d+)?)\s?mm"#,
         ], { "\($0) mm" }),
-        ("Water resistance", [#"water[- ]?resist\w*[^.\n\d]{0,24}(\d+\s?(?:m|metres|meters|atm|bar)\b)"#, #"(\d+\s?(?:m|metres|meters|atm|bar))\s+water[- ]?resist"#], { $0 }),
+        ("Water resistance", [#"water[- ]?resist\w*[^.\n\d]{0,24}(\d+\s?(?:m|metres|meters|atm|bar)\b)"#, #"(\d+\s?(?:m|metres|meters|atm|bar))\s+(?:of\s+)?water[- ]?resist"#], { $0 }),
         ("Power reserve", [#"power reserve[^.\n\d]{0,24}(\d+)\s?h"#, #"(\d+)[- ]?hours?[^.\n]{0,20}power reserve"#], { "\($0) hours" }),
         ("Lug width", [
-            #"(?<![\d.])(\d{2}(?:\.\d+)?)\s?mm\s+lug\s+width"#,
+            #"(?<![\d.])(\d{2}(?:\.\d+)?)\s?mm\s+(?:lug|strap|band)\s+width"#,
+            #"\b(?:lug|strap|band)\s+width[ \t:]+(\d{2}(?:\.\d+)?)(?:\s?-\s?\d{2})?\s?mm"#,
             #"\blug\s+width[ \t:]+"# + labelGap + #"(\d{2}(?:\.\d+)?)\s?mm"#,
         ], { "\($0) mm" }),
         ("Lug to lug", [
@@ -199,6 +204,8 @@ enum SpecNormalizer {
         ], { "\($0) mm" }),
         // A movement named by its maker: "Miyota 9039", "Sellita SW200-1".
         ("Movement", [#"\b((?:Miyota|Sellita|ETA|Valjoux|Soprod|Ronda|La Joux-Perret|Unitas|Peseux|Landeron|Seagull)\s+(?:[A-Z]{1,3}[\s-]?)?\d{2,4}[A-Za-z0-9\-.]*)"#], { $0 }),
+        // A strap or bracelet described in passing: "navy calfskin leather strap".
+        ("Bracelet", [#"\b((?:[A-Za-z\-]+\s){0,2}(?:leather|calfskin|alligator|crocodile|suede|rubber|silicone|nylon|NATO|canvas|fabric|Milanese|mesh|steel|titanium)\s(?:strap|bracelet|band))\b"#], { $0.prefix(1).uppercased() + $0.dropFirst() }),
         // Pre-owned listings.
         ("Year", [#"\b(?:year|circa|dated)\s*:?\s*((?:19[3-9]|20[0-3])\d)\b"#], { $0 }),
         ("Condition", [#"\b(unworn|brand new|new old stock|mint|excellent|very good|good|fair)\s+condition\b"#], { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }),

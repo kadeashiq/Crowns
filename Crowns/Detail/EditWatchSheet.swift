@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 struct EditWatchSheet: View {
     let watch: Watch
@@ -14,11 +15,22 @@ struct EditWatchSheet: View {
     @State private var notes = ""
     @State private var source = ""
     @State private var specs: [EditableSpec] = []
-    @State private var coverPhotoID: UUID?
+    @State private var cover = Cover.current
     @State private var newPhoto: ImageFetcher.Photo?
     @State private var photoError = ""
     @State private var isTakingPhoto = false
+    @State private var choosingSource = false
+    @State private var isPickingPhoto = false
+    @State private var photoItem: PhotosPickerItem?
     @State private var working = false
+
+    /// Which photo becomes the cover.
+    private enum Cover: Equatable {
+        case current
+        case saved(UUID)
+        /// Taken or chosen just now.
+        case new
+    }
 
     private struct EditableSpec: Identifiable {
         let id = UUID()
@@ -30,6 +42,8 @@ struct EditWatchSheet: View {
 
         ScrollView {
             VStack(spacing: Space.lg) {
+                photo
+
                 FormSection(title: "Watch") {
                     VStack(spacing: Space.xs) {
                         TextField("Brand", text: $brand).filledField()
@@ -48,14 +62,6 @@ struct EditWatchSheet: View {
                         TextField("Price", text: $price).keyboardType(.decimalPad)
                     }
                     .filledField()
-                }
-
-                let photos = watch.sortedPhotos
-                if photos.count > 1 {
-                    coverPicker(photos)
-                }
-                if photos.isEmpty, !watch.hasCover {
-                    photoSection
                 }
 
                 specsSection
@@ -95,27 +101,126 @@ struct EditWatchSheet: View {
         .onAppear(perform: load)
     }
 
-    /// A watch added by hand may not have a photo yet.
-    private var photoSection: some View {
-        FormSection(title: "Photo", footer: photoError) {
-            VStack(spacing: Space.sm) {
-                if let newPhoto {
-                    Image(uiImage: newPhoto.preview)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 120, height: 120)
-                        .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-                        .accessibilityLabel("New photo")
+    /// The cover as it will be saved, with a way to replace it.
+    private var photo: some View {
+        VStack(spacing: Space.sm) {
+            Theme.well
+                .overlay { coverImage }
+                .frame(height: 300)
+                .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+                .overlay(alignment: .bottomTrailing) {
+                    Button {
+                        choosingSource = true
+                    } label: {
+                        Label(hasPhoto ? "Replace" : "Add photo", systemImage: "photo")
+                    }
+                    .buttonStyle(.pill(.secondary, size: .small))
+                    .padding(Space.sm)
                 }
-                WatchPhotoButtons(
-                    hasPhoto: newPhoto != nil,
-                    isTakingPhoto: $isTakingPhoto,
-                    onPhoto: usePhoto,
-                    onFailure: { photoError = "Couldn't read that photo" }
-                )
+
+            // Older watches kept every photo from their page.
+            let photos = watch.sortedPhotos
+            if photos.count > 1 {
+                ScrollView(.horizontal) {
+                    HStack(spacing: Space.sm) {
+                        ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
+                            tile(.saved(photo.id), label: "Photo \(index + 1)") {
+                                DecodedImage(key: photo.id.uuidString, bytes: .photo(photo), maxPixel: 360, contentMode: .fill)
+                            }
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
             }
-            .frame(maxWidth: .infinity)
+
+            if !photoError.isEmpty {
+                Text(photoError)
+                    .font(Typeface.caption)
+                    .foregroundStyle(Theme.inkTertiary)
+            }
         }
+        .confirmationDialog(hasPhoto ? "Replace photo" : "Add photo", isPresented: $choosingSource) {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button("Take Photo") { isTakingPhoto = true }
+            }
+            Button("Choose from Library") { isPickingPhoto = true }
+        }
+        .photosPicker(isPresented: $isPickingPhoto, selection: $photoItem, matching: .images)
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task {
+                let loaded = try? await item.loadTransferable(type: Data.self)
+                if let data = loaded ?? nil {
+                    usePhoto(data)
+                } else {
+                    photoError = "Couldn't read that photo"
+                }
+                photoItem = nil
+            }
+        }
+        .fullScreenCover(isPresented: $isTakingPhoto) {
+            CameraPicker { image in
+                isTakingPhoto = false
+                guard let image else { return }
+                Task {
+                    let data = await Task.detached(priority: .userInitiated) {
+                        image.jpegData(compressionQuality: 0.9)
+                    }.value
+                    if let data {
+                        usePhoto(data)
+                    } else {
+                        photoError = "Couldn't read that photo"
+                    }
+                }
+            }
+            .ignoresSafeArea()
+        }
+    }
+
+    private var hasPhoto: Bool { watch.hasCover || newPhoto != nil }
+
+    @ViewBuilder
+    private var coverImage: some View {
+        switch cover {
+        case .new:
+            if let newPhoto {
+                Image(uiImage: newPhoto.preview)
+                    .resizable()
+                    .scaledToFill()
+            }
+        case .saved(let id):
+            if let photo = watch.sortedPhotos.first(where: { $0.id == id }) {
+                DecodedImage(key: photo.id.uuidString, bytes: .photo(photo), maxPixel: 1400, contentMode: .fill)
+            }
+        case .current:
+            if watch.hasCover {
+                WatchImage(watch: watch, size: .full)
+            } else {
+                Image(systemName: "photo")
+                    .font(.largeTitle)
+                    .foregroundStyle(Theme.inkTertiary)
+            }
+        }
+    }
+
+    private func tile(_ choice: Cover, label: String, @ViewBuilder image: () -> some View) -> some View {
+        let selected = cover == choice
+        return Button {
+            Haptics.tick()
+            cover = choice
+        } label: {
+            image()
+                .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                .padding(3)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radius.sm + 3, style: .continuous)
+                        .strokeBorder(Theme.ink, lineWidth: selected ? 2 : 0)
+                )
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func usePhoto(_ data: Data) {
@@ -129,33 +234,7 @@ struct EditWatchSheet: View {
             }
             photoError = ""
             newPhoto = photo
-        }
-    }
-
-    private func coverPicker(_ photos: [WatchPhoto]) -> some View {
-        FormSection(title: "Cover") {
-            ScrollView(.horizontal) {
-                HStack(spacing: Space.sm) {
-                    ForEach(photos) { photo in
-                        let selected = coverPhotoID == photo.id
-                        Button {
-                            Haptics.tick()
-                            coverPhotoID = photo.id
-                        } label: {
-                            DecodedImage(key: photo.id.uuidString, bytes: .photo(photo), maxPixel: 360, contentMode: .fill)
-                                .frame(width: 72, height: 72)
-                                .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
-                                .padding(3)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: Radius.sm + 3, style: .continuous)
-                                        .strokeBorder(Theme.ink, lineWidth: selected ? 2 : 0)
-                                )
-                        }
-                        .buttonStyle(PressableStyle())
-                    }
-                }
-            }
-            .scrollIndicators(.hidden)
+            cover = .new
         }
     }
 
@@ -182,6 +261,7 @@ struct EditWatchSheet: View {
                     Label("Add spec", systemImage: "plus")
                 }
                 .buttonStyle(.pill(.quiet, size: .small))
+                .frame(maxWidth: .infinity)
             }
         }
     }
@@ -194,7 +274,7 @@ struct EditWatchSheet: View {
         notes = watch.notes
         source = watch.sourceURLString
         specs = watch.specs.map { EditableSpec(label: $0.label, value: $0.value) }
-        coverPhotoID = watch.sortedPhotos.first?.id
+        cover = watch.sortedPhotos.first.map { .saved($0.id) } ?? .current
     }
 
     private func save() async {
@@ -215,17 +295,23 @@ struct EditWatchSheet: View {
             .map { Spec(label: $0.label.trimmingCharacters(in: .whitespaces), value: $0.value.trimmingCharacters(in: .whitespaces)) }
             .filter { !$0.label.isEmpty && !$0.value.isEmpty }
 
-        // A new cover: move it to the front.
-        let photos = watch.sortedPhotos
-        if let coverPhotoID, coverPhotoID != photos.first?.id, let chosen = photos.first(where: { $0.id == coverPhotoID }), let data = chosen.data {
-            var reordered = photos
-            reordered.removeAll { $0.id == coverPhotoID }
-            reordered.insert(chosen, at: 0)
-            for (index, photo) in reordered.enumerated() { photo.index = index }
-            WatchRecorder.setCover(of: watch, to: await CoverImages.encoding(data))
-        }
-        if let newPhoto {
-            WatchRecorder.setCover(of: watch, to: await CoverImages.encoding(newPhoto.data))
+        switch cover {
+        case .current:
+            break
+        case .saved(let id):
+            // Another saved photo: move it to the front.
+            let photos = watch.sortedPhotos
+            if id != photos.first?.id, let chosen = photos.first(where: { $0.id == id }), let data = chosen.data {
+                var reordered = photos
+                reordered.removeAll { $0.id == id }
+                reordered.insert(chosen, at: 0)
+                for (index, photo) in reordered.enumerated() { photo.index = index }
+                WatchRecorder.setCover(of: watch, to: await CoverImages.encoding(data))
+            }
+        case .new:
+            if let newPhoto {
+                WatchRecorder.setCover(of: watch, to: await CoverImages.encoding(newPhoto.data))
+            }
         }
         try? context.save()
         working = false

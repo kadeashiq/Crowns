@@ -540,6 +540,10 @@
 			fileRef = 81716A7A622E556EB33DE88B;
 			isa = PBXBuildFile;
 		};
+		DD588323A9118F30124318B7 = {
+			fileRef = 8E07EE6D66AFE3128F542963;
+			isa = PBXBuildFile;
+		};
 		E15ABF3FF1D76DAB624814FC = {
 			fileRef = 3F5192179A2F39F309BB30B9;
 			isa = PBXBuildFile;
@@ -922,6 +926,12 @@
 			path = WatchRecorder.swift;
 			sourceTree = "<group>";
 		};
+		8E07EE6D66AFE3128F542963 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.json;
+			path = "rolex-after-in-site-navigation.snapshot.json";
+			sourceTree = "<group>";
+		};
 		931A4159E120287570BECFFA = {
 			isa = PBXFileReference;
 			lastKnownFileType = folder.iconcomposer.icon;
@@ -1141,6 +1151,7 @@
 				8C44EAD7287F3F658FDEFE72,
 				4A342D508254A66CC8399D54,
 				E517E30BFF4F5F06B342FCBA,
+				8E07EE6D66AFE3128F542963,
 				602B1D0CB0031B490A682E1B,
 			);
 			isa = PBXGroup;
@@ -1488,6 +1499,7 @@
 				752C7E905A692BB0E18FDC7E,
 				24F0C1A76C86A7E3865C2C4F,
 				3C038AD7605C8587F7F1B671,
+				DD588323A9118F30124318B7,
 				D5BDA700117A775E66D2B46C,
 			);
 			isa = PBXResourcesBuildPhase;
