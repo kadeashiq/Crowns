@@ -12,7 +12,7 @@ Target membership is by folder:
 
 To add an app icon, drop a `.icon` file with no spaces in its name into
 Crowns/Icons and re-run: it becomes an alternate icon, gets a preview, and
-appears in Settings by itself. Crowns.icon stays the primary icon.
+appears in Settings by itself. Green.icon stays the primary icon.
 
 Re-run after adding or removing files. Adding files in Xcode also works; the
 next run of this script picks them up from disk either way. Object IDs are
@@ -54,7 +54,7 @@ FILE_TYPES = {
 
 ICTOOL = "/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents/Executables/ictool"
 ICONS = os.path.join(ROOT, "Crowns", "Icons")
-PRIMARY_ICON = "Crowns"
+PRIMARY_ICON = "Green"
 icon_names = sorted(os.path.splitext(n)[0] for n in os.listdir(ICONS) if n.endswith(".icon"))
 alternate_icons = [n for n in icon_names if n != PRIMARY_ICON]
 

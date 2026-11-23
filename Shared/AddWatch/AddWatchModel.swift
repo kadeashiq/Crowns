@@ -76,6 +76,8 @@ final class AddWatchModel {
     var boxes: [BoxChoice] = []
     var selectedBoxID: UUID?
     var errorText = ""
+    /// Why the page wasn't read, when it can't be on this iPhone.
+    var notice = ""
     /// Being added by hand rather than read from a page.
     var isManual = false
     /// The camera is up. The sheet behind it mustn't count as closed.
@@ -154,6 +156,18 @@ final class AddWatchModel {
             stage = .ready
             photosLoading = false
         }
+    }
+
+    /// The form to fill in by hand, for a page this iPhone can't read. The
+    /// link is still saved as the watch's source.
+    func startByHand(from url: URL?) {
+        draft.sourceURL = url
+        if var host = url?.host() {
+            if host.hasPrefix("www.") { host.removeFirst(4) }
+            draft.siteName = host
+        }
+        notice = AppleIntelligence.unavailableReason
+        start(.manual)
     }
 
     /// Uses this photo for a watch added by hand.

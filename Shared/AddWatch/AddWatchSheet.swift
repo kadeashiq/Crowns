@@ -220,6 +220,8 @@ struct AddWatchForm: View {
         } footer: {
             if !model.errorText.isEmpty {
                 Text(model.errorText)
+            } else if !model.notice.isEmpty {
+                Text(model.notice)
             } else if !model.priceNote.isEmpty {
                 Text(model.priceNote)
             }

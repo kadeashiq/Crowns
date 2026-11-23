@@ -67,6 +67,10 @@
 			fileRef = B8BDF60F4C6928CA7CDBBD58;
 			isa = PBXBuildFile;
 		};
+		169513B27191EC1D2024E1AB = {
+			fileRef = 9108FFBDC760A03712D36864;
+			isa = PBXBuildFile;
+		};
 		19A445117AAF6CB6CAC4C403 = {
 			fileRef = 9B5A5C2D1108D4AEEAFE6BBD;
 			isa = PBXBuildFile;
@@ -131,6 +135,10 @@
 			fileRef = F268CE732990D3D55779A975;
 			isa = PBXBuildFile;
 		};
+		3B504DF0397D7F3ADE0022EF = {
+			fileRef = 21BA10F92BC5E3EDCA52BA2C;
+			isa = PBXBuildFile;
+		};
 		3C038AD7605C8587F7F1B671 = {
 			fileRef = E517E30BFF4F5F06B342FCBA;
 			isa = PBXBuildFile;
@@ -175,16 +183,16 @@
 			fileRef = E26A69B5375FB48B68B71D98;
 			isa = PBXBuildFile;
 		};
-		484C9B14B6C1E988D219923F = {
-			fileRef = 931A4159E120287570BECFFA;
-			isa = PBXBuildFile;
-		};
 		4ACD514539CD1056847CDF97 = {
 			fileRef = D42D7D1074826F31F90427B5;
 			isa = PBXBuildFile;
 		};
 		4B711AAFC62656E9CF6456B8 = {
 			fileRef = 2A43CD30D29EBB98A7F377F2;
+			isa = PBXBuildFile;
+		};
+		4D413EBA0A66E834C4E0892A = {
+			fileRef = 0D30AA4FC8275A3CDC0747E9;
 			isa = PBXBuildFile;
 		};
 		4F04CE0BA5E752FE0457851E = {
@@ -223,6 +231,10 @@
 			fileRef = 94BBBC0224520EB5FEA156DD;
 			isa = PBXBuildFile;
 		};
+		5CFBAE82674F6D5850A48395 = {
+			fileRef = 0D30AA4FC8275A3CDC0747E9;
+			isa = PBXBuildFile;
+		};
 		5D8E38FCBE4D5A21B8D72F1F = {
 			fileRef = 9941327DED463A9E083D73AA;
 			isa = PBXBuildFile;
@@ -233,6 +245,10 @@
 		};
 		62B3A5BE604FFBB61FAE7D02 = {
 			fileRef = 29B0F75E87992ADE2BC1F0D5;
+			isa = PBXBuildFile;
+		};
+		652DFCB02EDB619BEE07DDE5 = {
+			fileRef = 0D30AA4FC8275A3CDC0747E9;
 			isa = PBXBuildFile;
 		};
 		659A34CBBA37D6DBFB170CA5 = {
@@ -265,6 +281,10 @@
 		};
 		6A567364AE7A536B155A77EC = {
 			fileRef = 2030FCE70C4FBCD875BBBA13;
+			isa = PBXBuildFile;
+		};
+		6C9A5EA43387EB97710387E3 = {
+			fileRef = 5C2D47283974BA85645B1270;
 			isa = PBXBuildFile;
 		};
 		6DF2CFFC4EB43BBB4E31E92E = {
@@ -379,6 +399,10 @@
 			fileRef = D42D7D1074826F31F90427B5;
 			isa = PBXBuildFile;
 		};
+		9CF4CBF9770AF1EFBBA3C0A7 = {
+			fileRef = E2CCD3291D144C8134166AFB;
+			isa = PBXBuildFile;
+		};
 		9EA4019B341F0278179105CC = {
 			fileRef = 2030FCE70C4FBCD875BBBA13;
 			isa = PBXBuildFile;
@@ -461,6 +485,10 @@
 		};
 		C1E5EB0932E014175B73131F = {
 			fileRef = EB7265E7D5094211005CDE6C;
+			isa = PBXBuildFile;
+		};
+		C249F833FAF6120BA9238CA9 = {
+			fileRef = E3BBC5B55E56461581348221;
 			isa = PBXBuildFile;
 		};
 		C293BD884E1D339386B8B6E1 = {
@@ -596,6 +624,10 @@
 			fileRef = 6C5C2A3C33E8C1927AF39C47;
 			isa = PBXBuildFile;
 		};
+		F57189BE3C32D41411D48421 = {
+			fileRef = CAD651F03D5FAAC792EFF576;
+			isa = PBXBuildFile;
+		};
 		F96F968B3B68D6F13D3046FD = {
 			fileRef = 7A2BCFC84AF82983808B738F;
 			isa = PBXBuildFile;
@@ -666,6 +698,12 @@
 			path = CrownsShare.appex;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
+		0D30AA4FC8275A3CDC0747E9 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = AppleIntelligence.swift;
+			sourceTree = "<group>";
+		};
 		1279ED96530B59A0F53E26D4 = {
 			explicitFileType = wrapper.application;
 			includeInIndex = 0;
@@ -703,6 +741,12 @@
 			isa = PBXFileReference;
 			path = CrownsTests.xctest;
 			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		21BA10F92BC5E3EDCA52BA2C = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.iconcomposer.icon;
+			path = Purple.icon;
+			sourceTree = "<group>";
 		};
 		27E43E91A84E09C76DA4488A = {
 			isa = PBXFileReference;
@@ -830,6 +874,12 @@
 			path = CardGrid.swift;
 			sourceTree = "<group>";
 		};
+		5C2D47283974BA85645B1270 = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.iconcomposer.icon;
+			path = Black.icon;
+			sourceTree = "<group>";
+		};
 		602B1D0CB0031B490A682E1B = {
 			isa = PBXFileReference;
 			lastKnownFileType = text.json;
@@ -932,10 +982,10 @@
 			path = "rolex-after-in-site-navigation.snapshot.json";
 			sourceTree = "<group>";
 		};
-		931A4159E120287570BECFFA = {
+		9108FFBDC760A03712D36864 = {
 			isa = PBXFileReference;
-			lastKnownFileType = folder.iconcomposer.icon;
-			path = Crowns.icon;
+			lastKnownFileType = sourcecode.swift;
+			path = WelcomeFlow.swift;
 			sourceTree = "<group>";
 		};
 		94BBBC0224520EB5FEA156DD = {
@@ -1034,6 +1084,12 @@
 			path = JSONValue.swift;
 			sourceTree = "<group>";
 		};
+		CAD651F03D5FAAC792EFF576 = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.iconcomposer.icon;
+			path = Burgundy.icon;
+			sourceTree = "<group>";
+		};
 		D2261BEB4A304DAD09795FD5 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -1050,6 +1106,18 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = LinkPreviewFallback.swift;
+			sourceTree = "<group>";
+		};
+		E2CCD3291D144C8134166AFB = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.iconcomposer.icon;
+			path = Chocolate.icon;
+			sourceTree = "<group>";
+		};
+		E3BBC5B55E56461581348221 = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.iconcomposer.icon;
+			path = Blue.icon;
 			sourceTree = "<group>";
 		};
 		E517E30BFF4F5F06B342FCBA = {
@@ -1190,6 +1258,7 @@
 		};
 		769B5BEF36E315960B949E5F = {
 			children = (
+				0D30AA4FC8275A3CDC0747E9,
 				7EB327DA1B7DEB763D1A3FB2,
 				D2261BEB4A304DAD09795FD5,
 				94BBBC0224520EB5FEA156DD,
@@ -1225,6 +1294,7 @@
 		7C17BF2213C8AC045C952500 = {
 			children = (
 				7667ED1C14B308C6DBE7F303,
+				9108FFBDC760A03712D36864,
 			);
 			isa = PBXGroup;
 			path = Onboarding;
@@ -1281,8 +1351,12 @@
 		};
 		A609734F5FB52A733908F77C = {
 			children = (
-				931A4159E120287570BECFFA,
+				5C2D47283974BA85645B1270,
+				E3BBC5B55E56461581348221,
+				CAD651F03D5FAAC792EFF576,
+				E2CCD3291D144C8134166AFB,
 				3F5192179A2F39F309BB30B9,
+				21BA10F92BC5E3EDCA52BA2C,
 			);
 			isa = PBXGroup;
 			path = Icons;
@@ -1509,8 +1583,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				FD2791C5541F174F4DBD7A9E,
-				484C9B14B6C1E988D219923F,
+				6C9A5EA43387EB97710387E3,
+				C249F833FAF6120BA9238CA9,
+				F57189BE3C32D41411D48421,
+				9CF4CBF9770AF1EFBBA3C0A7,
 				E15ABF3FF1D76DAB624814FC,
+				3B504DF0397D7F3ADE0022EF,
 				ECB7927101F73FB1B90D0EB6,
 				1AB71900F86B947C44376B55,
 			);
@@ -1534,6 +1612,7 @@
 				E94268EB7FF149D90EFA7590,
 				827F5E447EFF8E19C81845F3,
 				9128C4A11152B3260A687E9C,
+				169513B27191EC1D2024E1AB,
 				BB651F102F305330A121E777,
 				85D24B64EF26C5DBF02D3A24,
 				A1195F8D821E6954123AEB41,
@@ -1552,6 +1631,7 @@
 				7B45D1B2C6F079463E24873F,
 				4B711AAFC62656E9CF6456B8,
 				EF932EBA515859DCDB3603AC,
+				652DFCB02EDB619BEE07DDE5,
 				CFDCB0BEE0125A8F2E1FB739,
 				B0E0413F22F186B8CD760A27,
 				139E9354C86647FCD2198C87,
@@ -1599,6 +1679,7 @@
 				DB997F0C394C95942F18D0FE,
 				D3610DD8009AA6A5861DE63F,
 				9C13CB70CF675F2067091448,
+				5CFBAE82674F6D5850A48395,
 				0F2D2A524257C0C09FC0DCC4,
 				528900DF7BD7E0E9219741C7,
 				BFA165EE119C7769D7721D1B,
@@ -1648,6 +1729,7 @@
 				F96F968B3B68D6F13D3046FD,
 				98E75BD387D2FD198AC9A3AF,
 				4ACD514539CD1056847CDF97,
+				4D413EBA0A66E834C4E0892A,
 				438F471472EBE7D00B8D0696,
 				0D16F4A379F70507F56B9263,
 				5B86AB5CCC075C84238A59CE,
@@ -1771,8 +1853,8 @@
 		};
 		9427245F117ACAB6B0A4B351 = {
 			buildSettings = {
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = Green;
-				ASSETCATALOG_COMPILER_APPICON_NAME = Crowns;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "Black Blue Burgundy Chocolate Purple";
+				ASSETCATALOG_COMPILER_APPICON_NAME = Green;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Config/Crowns.entitlements;
@@ -1812,8 +1894,8 @@
 		};
 		C4B17B54546A1D55FA7156FD = {
 			buildSettings = {
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = Green;
-				ASSETCATALOG_COMPILER_APPICON_NAME = Crowns;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "Black Blue Burgundy Chocolate Purple";
+				ASSETCATALOG_COMPILER_APPICON_NAME = Green;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Config/Crowns.entitlements;

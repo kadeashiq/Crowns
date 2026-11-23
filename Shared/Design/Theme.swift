@@ -16,6 +16,8 @@ enum Theme {
     /// Text and icons on an `ink` fill.
     static let onInk = adaptive(light: 0xFFFFFF, dark: 0x0A0A0A)
     static let hairline = adaptive(light: 0xE4E4E6, dark: 0x2F2F32)
+    /// A switch that's on. Ink in dark mode is near white, which hides the white knob.
+    static let switchOn = adaptive(light: 0x0A0A0A, dark: 0x636366)
 
     /// For UIKit, which can't take SwiftUI colours.
     static let uiCanvas = dynamic(light: 0xF2F2F3, dark: 0x000000)

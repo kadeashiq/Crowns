@@ -19,7 +19,7 @@ enum FoundationModelsFallback {
     static func fill(_ draft: inout ListingDraft, title: String, text: String) async {
         #if canImport(FoundationModels)
         guard let guess = await guess(title: title, text: text) else { return }
-        apply(guess, to: &draft, page: title + "\n" + text)
+        apply(guess, to: &draft, title: title, page: title + "\n" + text)
         #endif
     }
 
@@ -153,11 +153,13 @@ extension FoundationModelsFallback {
         }
     }
 
-    static func apply(_ guess: WatchListingGuess, to d: inout ListingDraft, page: String) {
+    static func apply(_ guess: WatchListingGuess, to d: inout ListingDraft, title: String, page: String) {
         var used = false
-        // Only a brand the app knows: a model name read as the brand looks just as sure.
+        // Only a brand the app knows, named as a whole word in the page's
+        // title: a model name read as the brand looks just as sure, and
+        // "colour swatches" further down would vouch for Swatch.
         let brand = guess.brand.trimmingCharacters(in: .whitespacesAndNewlines)
-        if d.brand.isEmpty, let known = WatchBrands.canonical(brand), isGrounded(brand, in: page) {
+        if d.brand.isEmpty, let known = WatchBrands.canonical(brand), WatchBrands.wordRange(of: brand, in: title) != nil {
             d.brand = known
             used = true
         }

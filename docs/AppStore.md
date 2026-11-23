@@ -29,7 +29,10 @@ Export compliance: `ITSAppUsesNonExemptEncryption = NO` is already in the Info.p
 
   Found one you like? Tap Share in Safari, then Crowns. The photo, price and specs come with it.
 
-  • Save from any shop or listing
+  Saving from Safari needs an iPhone with Apple Intelligence turned on. Pages are read on your iPhone, never sent anywhere. On other iPhones, add any watch yourself: its details, a photo, and which box.
+
+  • Save from any shop or listing (with Apple Intelligence)
+  • Add any watch by hand
   • Pick your cover photo
   • Sort watches into boxes
   • Switch between grid and list
@@ -39,7 +42,7 @@ Export compliance: `ITSAppUsesNonExemptEncryption = NO` is already in the Info.p
   One price. No subscription. No ads.
 
 - **Keywords:** watch,collection,wishlist,horology,watches,box,collector,tracker,timepiece,luxury
-- **Review notes:** "To test saving: open any watch listing in Safari, such as an eBay listing, tap ••• then Share, then Crowns."
+- **Review notes:** "Saving from Safari and Extract from URL need a device with Apple Intelligence turned on (iPhone 15 Pro or later). To test: open any watch listing in Safari, such as an eBay listing, tap ••• then Share, then Crowns. On a device without Apple Intelligence these are hidden by design, and the + button offers Add manually only."
 
 ## Screenshots (6.9")
 

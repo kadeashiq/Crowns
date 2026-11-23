@@ -10,7 +10,10 @@ enum AppIcons {
         return [nil] + alternates.keys.sorted()
     }
 
-    static func title(_ name: String?) -> String { name ?? "Crowns" }
+    /// File names can't have spaces, so a few read better spelled out.
+    private static let titles = ["Blue": "Midnight Blue"]
 
-    static func preview(_ name: String?) -> String { "IconPreview-\(name ?? "Crowns")" }
+    static func title(_ name: String?) -> String { name.map { titles[$0] ?? $0 } ?? "Green" }
+
+    static func preview(_ name: String?) -> String { "IconPreview-\(name ?? "Green")" }
 }

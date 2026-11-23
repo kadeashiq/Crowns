@@ -146,6 +146,7 @@ struct WatchDetailView: View {
 
             if let url = watch.sourceURL {
                 HStack(spacing: Space.xs) {
+                    let canReadLinks = AppleIntelligence.isAvailable
                     Link(destination: url) {
                         HStack(spacing: 6) {
                             Text(watch.sourceSiteName.isEmpty ? (url.host() ?? "Source") : watch.sourceSiteName)
@@ -156,13 +157,15 @@ struct WatchDetailView: View {
                     }
                     .buttonStyle(.pill(.secondary))
 
-                    Button {
-                        readAgain(url)
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
+                    if canReadLinks {
+                        Button {
+                            readAgain(url)
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .buttonStyle(.circle(diameter: 54))
+                        .accessibilityLabel("Update from page")
                     }
-                    .buttonStyle(.circle(diameter: 54))
-                    .accessibilityLabel("Update from page")
                 }
             }
         }

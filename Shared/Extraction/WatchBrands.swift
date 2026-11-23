@@ -143,11 +143,13 @@ enum WatchBrands {
     }
 
     /// A brand named by the site's domain, e.g. tudorwatch.com → Tudor.
+    /// The brand has to start a part of the address: "swatch" sits inside
+    /// bobswatches.com and swisswatchexpo.com too.
     static func find(inHost host: String) -> String? {
-        let squashed = fold(host).filter { $0.isLetter || $0.isNumber }
+        let parts = fold(host).split(separator: ".").map { $0.filter { $0.isLetter || $0.isNumber } }
         for (spelling, name) in spellings where !ambiguous.contains(name) {
             let key = fold(spelling).filter { $0.isLetter || $0.isNumber }
-            if key.count >= 4, squashed.contains(key) { return name }
+            if key.count >= 4, parts.contains(where: { $0.hasPrefix(key) }) { return name }
         }
         return nil
     }

@@ -77,17 +77,12 @@ struct SettingsView: View {
     }
 
     private var iconSection: some View {
-        FormSection(title: "App icon", padding: Space.sm) {
-            ScrollView(.horizontal) {
-                HStack(spacing: Space.md) {
-                    ForEach(AppIcons.all, id: \.self) { name in
-                        iconTile(name)
-                    }
+        FormSection(title: "App icon", padding: Space.md) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Space.sm), count: 3), spacing: Space.md) {
+                ForEach(AppIcons.all, id: \.self) { name in
+                    iconTile(name)
                 }
-                .padding(.vertical, 2)
             }
-            .scrollIndicators(.hidden)
-            .scrollClipDisabled()
         }
     }
 
@@ -138,7 +133,7 @@ struct SettingsView: View {
             ValueRow(title: "iCloud sync", icon: "icloud.fill") {
                 Toggle("iCloud sync", isOn: $iCloudSync)
                     .labelsHidden()
-                    .tint(Theme.ink)
+                    .tint(Theme.switchOn)
                     .disabled(sync.account == .signedOut)
             }
         }
@@ -198,19 +193,28 @@ struct SettingsView: View {
     }
 
     private var helpSection: some View {
-        FormSection(title: "Help", padding: 0) {
+        FormSection(title: "Help", footer: appleIntelligenceDetail, padding: 0) {
             VStack(spacing: 0) {
                 Button { guide = .tour } label: {
                     ValueRow(title: "How Crowns works", icon: "sparkles", showsChevron: true)
                 }
                 .buttonStyle(PressableStyle())
-                RowDivider()
-                Button { guide = .safari } label: {
-                    ValueRow(title: "Save from Safari", icon: "safari.fill", showsChevron: true)
+                // Saving from Safari needs Apple Intelligence.
+                if AppleIntelligence.isAvailable {
+                    RowDivider()
+                    Button { guide = .safari } label: {
+                        ValueRow(title: "Save from Safari", icon: "safari.fill", showsChevron: true)
+                    }
+                    .buttonStyle(PressableStyle())
                 }
-                .buttonStyle(PressableStyle())
             }
         }
+    }
+
+    private var appleIntelligenceDetail: String {
+        AppleIntelligence.isAvailable
+            ? "Apple Intelligence is on, so Crowns can save watches from Safari. Pages are read on your iPhone."
+            : AppleIntelligence.unavailableReason
     }
 
     private var aboutSection: some View {

@@ -49,6 +49,9 @@ struct AddFlowSheet: View {
 
     private var typedURL: URL? { ShareInputReader.firstLink(in: link) }
 
+    /// Reading a link needs Apple Intelligence; without it there's only typing it in.
+    private let canReadLinks = AppleIntelligence.isAvailable
+
     private var chooser: some View {
         Group {
             if isRoomy {
@@ -90,21 +93,25 @@ struct AddFlowSheet: View {
                 Text("Add a watch")
                     .font(Typeface.title)
                     .foregroundStyle(Theme.ink)
-                Text("**Found one online?** Paste the link and we'll do the rest.\n**Already on your wrist?** Enter it yourself.")
+                Text(canReadLinks
+                     ? "**Found one online?** Paste the link and we'll do the rest.\n**Already on your wrist?** Enter it yourself."
+                     : AppleIntelligence.unavailableReason)
                     .font(Typeface.caption)
                     .foregroundStyle(Theme.inkSecondary)
                     .multilineTextAlignment(.center)
             }
 
             VStack(spacing: isRoomy ? Space.sm : 10) {
-                Button {
-                    link = ""
-                    isEnteringLink = true
-                } label: {
-                    Text("Extract from URL")
-                        .frame(maxWidth: .infinity)
+                if canReadLinks {
+                    Button {
+                        link = ""
+                        isEnteringLink = true
+                    } label: {
+                        Text("Extract from URL")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.pill())
                 }
-                .buttonStyle(.pill())
 
                 Button {
                     begin(.manual)
@@ -112,7 +119,7 @@ struct AddFlowSheet: View {
                     Text("Add manually")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.pill(.secondary, bordered: true))
+                .buttonStyle(canReadLinks ? .pill(.secondary, bordered: true) : .pill())
             }
         }
         .padding(isRoomy ? Space.xl : Space.md)

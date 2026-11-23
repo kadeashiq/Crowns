@@ -318,6 +318,23 @@ struct PageSpecTests {
         #expect(ListingInterpreter.brandSpelled(by: "watchfinder.co.uk", in: "Watches of Switzerland") == nil)
     }
 
+    @Test func aBrandHasToStartTheWebAddress() {
+        #expect(WatchBrands.find(inHost: "www.swatch.com") == "Swatch")
+        #expect(WatchBrands.find(inHost: "www.tudorwatch.com") == "Tudor")
+        #expect(WatchBrands.find(inHost: "www.jaeger-lecoultre.com") == "Jaeger-LeCoultre")
+        #expect(WatchBrands.find(inHost: "www.bobswatches.com") == nil)
+        #expect(WatchBrands.find(inHost: "www.swisswatchexpo.com") == nil)
+    }
+
+    @Test func modelBrandHasToBeInTheTitle() {
+        let guess = WatchListingGuess(brand: "Swatch", model: "", reference: "", price: 0, currency: "", specs: [])
+        var d = ListingDraft()
+        FoundationModelsFallback.apply(guess, to: &d, title: "Field 38 – Halden", page: "Field 38\nChoose from three colour swatches.")
+        #expect(d.brand.isEmpty)
+        FoundationModelsFallback.apply(guess, to: &d, title: "Swatch Sistem51", page: "Swatch Sistem51")
+        #expect(d.brand == "Swatch")
+    }
+
     @Test func modelFallbackOnlyKeepsValuesThatLookRight() {
         let page = "The watch offers 100 meters of water resistance."
         #expect(FoundationModelsFallback.usable("100 meters of water resistance", for: "Water resistance", in: page) == "100 meters")

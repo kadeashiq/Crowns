@@ -129,7 +129,9 @@ struct MainView: View {
                 .crownsSheet()
         }
         .fullScreenCover(isPresented: Binding(get: { !hasSeenOnboarding }, set: { _ in })) {
-            OnboardingView(pages: OnboardingPage.tour + OnboardingPage.safari, finishTitle: "Get started", canSkip: true) {
+            WelcomeFlow { startBoxID in
+                if let startBoxID { selectedBoxID = startBoxID }
+                store.applySyncSetting()
                 hasSeenOnboarding = true
             }
         }

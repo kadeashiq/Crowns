@@ -29,7 +29,11 @@ final class ShareViewController: UIViewController {
         let items = extensionContext?.inputItems.compactMap { $0 as? NSExtensionItem } ?? []
         Task { @MainActor in
             let input = await ShareInputReader.read(items)
-            model.start(.share(input))
+            if AppleIntelligence.isAvailable {
+                model.start(.share(input))
+            } else {
+                model.startByHand(from: input.url)
+            }
         }
     }
 
