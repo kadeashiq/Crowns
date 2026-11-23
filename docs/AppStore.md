@@ -22,25 +22,31 @@ Export compliance: `ITSAppUsesNonExemptEncryption = NO` is already in the Info.p
 
 - **Name:** Crowns
 - **Subtitle:** Your watch collection, sorted
-- **Promotional text:** Keep every watch you own and want in one simple grid. Save them from Safari with Apple Intelligence, or add any watch yourself.
+- **Promotional text:** Every watch you love, in one box. Save watches from Safari in seconds, or add them by hand. One price, no subscription.
 - **Description:**
 
-  Every watch you own. Every watch you want. One simple grid.
+  Every watch you love, in one box.
 
-  Found one you like? Tap Share in Safari, then Crowns. The photos, price and specs come with it, ready to check and save.
+  Crowns keeps your collection and your wishlist beautifully in one place. Every watch you own, and every one you're after, laid out like a watch box in your pocket.
 
-  Saving from Safari needs an iPhone with Apple Intelligence turned on. Pages are read on your iPhone and never sent anywhere. On any iPhone, you can add a watch yourself: its details, a photo, and which box.
+  Seen one you like? Save it in seconds. Share any listing from Safari and Crowns brings the photos, price and specs, read privately on your iPhone.
 
-  • Save from any shop or listing (with Apple Intelligence)
-  • Add any watch by hand, with your own photo
-  • Pick the cover photo you like best
-  • Sort watches into boxes: Wishlist, Collection, or your own
-  • Switch between grid and list
-  • Prices converted to pounds
-  • Six app icons to choose from
-  • Sync with iCloud. Only you can see your watches.
+  KNOW EVERY WATCH INSIDE OUT
+  • Photo, price and specs, all on one page
+  • See your wishlist at a glance in one tidy list
+  • Replace any photo and fine-tune every spec
+  • Prices from other currencies converted to pounds
 
-  One price. No subscription. No ads. No account.
+  ARRANGE IT YOUR WAY
+  • Wishlist, Collection, or boxes of your own, like Grails or Vintage
+  • Six icons to suit your taste, from Green to Midnight Blue
+  • Just as good after dark, with full Dark Mode
+
+  YOURS ALONE
+  • Keep them safe in iCloud. Only you can see your watches.
+  • No account, no ads, no subscription. One price.
+
+  Saving from Safari needs an iPhone with Apple Intelligence turned on. On any iPhone, you can add a watch by hand, with your own photo.
 
 - **Keywords:** watch,collection,wishlist,horology,watches,box,collector,tracker,timepiece,luxury
 - **Review notes:** "Saving from Safari and Extract from URL need a device with Apple Intelligence turned on (iPhone 15 Pro or later). To test: open any watch listing in Safari, such as an eBay listing, tap ••• then Share, then Crowns. On a device without Apple Intelligence these are hidden by design, and the + button offers Add manually only."
