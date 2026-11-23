@@ -185,7 +185,7 @@ private struct WelcomePage: View {
                     Text("Crowns")
                         .font(.system(size: 56, weight: .bold))
                         .foregroundStyle(Theme.ink)
-                    Text("Every watch you own and want, in one place.")
+                    Text("Your collection and your wishlist, kept beautifully in one place.")
                         .font(Typeface.body)
                         .foregroundStyle(Theme.inkSecondary)
                         .multilineTextAlignment(.center)
@@ -194,7 +194,7 @@ private struct WelcomePage: View {
                 names(Self.below)
             }
         } buttons: {
-            PrimaryButton(title: "Let's get started", action: next)
+            PrimaryButton(title: "Get started", action: next)
         }
     }
 
@@ -222,8 +222,8 @@ private struct ICloudPage: View {
         StepPage(step: .iCloud) {
             StepTitle(
                 icon: "icloud.fill",
-                title: "Keep them in iCloud",
-                subtitle: "Your watches stay in your own iCloud, so they come back on a new iPhone. Only you can see them."
+                title: "Keep them safe in iCloud",
+                subtitle: "Your watches follow you to a new iPhone, and only you can see them."
             )
             .padding(.top, Space.xxl)
         } buttons: {
@@ -248,8 +248,8 @@ private struct LinksPage: View {
 
     private static let steps = [
         ("onboarding-safari-menu", "Tap ••• then Share"),
-        ("onboarding-safari-share", "Tap Crowns"),
-        ("onboarding-safari-save", "Pick a cover"),
+        ("onboarding-safari-share", "Choose Crowns"),
+        ("onboarding-safari-save", "Pick your cover"),
     ]
 
     var body: some View {
@@ -291,26 +291,26 @@ private struct LinksPage: View {
         case .available:
             StepTitle(
                 icon: "apple.intelligence",
-                title: "Save from Safari",
-                subtitle: "Share a watch's page to Crowns and it brings the photos, price and specs. Apple Intelligence fills any gaps, on your iPhone."
+                title: "Save watches from Safari",
+                subtitle: "Share any listing to Crowns. The photos, price and specs come with it, read privately on your iPhone."
             )
         case .turnedOff:
             StepTitle(
                 icon: "apple.intelligence",
                 title: "Turn on Apple Intelligence",
-                subtitle: "Crowns uses it to save watches from Safari. Turn it on in Settings, under Apple Intelligence & Siri. Until then, add watches yourself."
+                subtitle: "Switch it on in Settings, under Apple Intelligence & Siri, to save watches from Safari. Until then, add them by hand."
             )
         case .gettingReady:
             StepTitle(
                 icon: "apple.intelligence",
                 title: "Almost ready",
-                subtitle: "Apple Intelligence is still downloading. Once it's done, you can save watches from Safari. Until then, add watches yourself."
+                subtitle: "Apple Intelligence is still downloading. When it's done, you can save watches straight from Safari."
             )
         case .notSupported:
             StepTitle(
                 icon: "square.and.pencil",
-                title: "Add watches yourself",
-                subtitle: "Saving from Safari needs an iPhone with Apple Intelligence. You can add any watch by hand: its details, a photo, and which box."
+                title: "Add watches your way",
+                subtitle: "Saving from Safari needs an iPhone with Apple Intelligence. You can still add any watch by hand, with your own photo."
             )
         }
     }
@@ -327,8 +327,8 @@ private struct StartBoxPage: View {
 
     private func look(_ box: Box) -> (icon: String, detail: String) {
         switch box.seedKey {
-        case BoxSeeder.collectionKey: ("checkmark.seal", "The watches you own")
-        case BoxSeeder.wishlistKey: ("heart", "The ones you want")
+        case BoxSeeder.collectionKey: ("checkmark.seal", "Watches you own")
+        case BoxSeeder.wishlistKey: ("heart", "Watches you're after")
         default: ("square.grid.2x2", "Your own box")
         }
     }
@@ -337,8 +337,8 @@ private struct StartBoxPage: View {
         StepPage(step: .start) {
             VStack(spacing: Space.xl) {
                 StepTitle(
-                    title: "Where do you want to start?",
-                    subtitle: "Crowns opens on this box. Add your own, like Grails or Vintage, and change them any time."
+                    title: "Where shall we start?",
+                    subtitle: "Pick the box Crowns opens on. Add your own, like Grails or Vintage, any time."
                 )
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: Space.sm), GridItem(.flexible(), spacing: Space.sm)], spacing: Space.sm) {
                     ForEach(boxes) { box in
@@ -423,7 +423,7 @@ private struct IconPage: View {
     var body: some View {
         StepPage(step: .icon) {
             VStack(spacing: Space.xl) {
-                StepTitle(title: "Pick your icon", subtitle: "You can change it in Settings.")
+                StepTitle(title: "Choose your icon", subtitle: "Six finishes to suit your taste. Change it any time in Settings.")
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Space.md), count: 3), spacing: Space.lg) {
                     ForEach(AppIcons.all, id: \.self) { name in
                         icon(name)
@@ -493,7 +493,7 @@ private struct FeaturesPage: View {
         .indexViewStyle(.page(backgroundDisplayMode: .never))
         .background(Theme.canvas)
         .fadingBar(.bottom) {
-            PrimaryButton(title: index == pages.count - 1 ? "Get started" : "Next") {
+            PrimaryButton(title: index == pages.count - 1 ? "Start my collection" : "Next") {
                 if index == pages.count - 1 {
                     next()
                 } else {

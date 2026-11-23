@@ -10,15 +10,15 @@ struct OnboardingPage: Identifiable {
     var id: String { image }
 
     static let tour = [
-        OnboardingPage(image: "onboarding-grid", title: "Every watch. One place.", message: "The ones you own and the ones you want."),
-        OnboardingPage(image: "onboarding-detail", title: "Know every detail", message: "Photo, price and specs, one tap away."),
-        OnboardingPage(image: "onboarding-boxes", title: "Sort it your way", message: "Make boxes. Drag them into order."),
+        OnboardingPage(image: "onboarding-grid", title: "Your watch box, in your pocket", message: "Everything you own and everything you want, in one grid."),
+        OnboardingPage(image: "onboarding-detail", title: "Every detail, one tap away", message: "Photo, price and specs, kept together."),
+        OnboardingPage(image: "onboarding-boxes", title: "Arrange it your way", message: "Make boxes and drag them into order."),
     ]
 
     static let safari = [
         OnboardingPage(image: "onboarding-safari-menu", step: "Step 1 of 3", title: "Find a watch", message: "In Safari, tap ••• then Share."),
-        OnboardingPage(image: "onboarding-safari-share", step: "Step 2 of 3", title: "Tap Crowns", message: "Not there? Tap More and add it."),
-        OnboardingPage(image: "onboarding-safari-save", step: "Step 3 of 3", title: "Pick a cover", message: "We read the listing. You tap Save."),
+        OnboardingPage(image: "onboarding-safari-share", step: "Step 2 of 3", title: "Choose Crowns", message: "Not there? Tap More and add it."),
+        OnboardingPage(image: "onboarding-safari-save", step: "Step 3 of 3", title: "Pick your cover", message: "Crowns reads the listing. You tap Save."),
     ]
 }
 
