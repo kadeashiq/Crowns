@@ -20,7 +20,7 @@ Export compliance: `ITSAppUsesNonExemptEncryption = NO` is already in the Info.p
 
 ## Listing copy
 
-- **Name:** Crowns
+- **Name:** Crowns - Watchbox & Wishlist (App Store name, 28 of 30 characters; the Home Screen still shows Crowns)
 - **Subtitle:** Your watch collection, sorted
 - **Promotional text:** The watch box that never runs out of slots. Save watches straight from Safari or add them by hand, and pay once with no subscription.
 - **Description:**
