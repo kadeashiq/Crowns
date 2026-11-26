@@ -22,10 +22,10 @@ Export compliance: `ITSAppUsesNonExemptEncryption = NO` is already in the Info.p
 
 - **Name:** Crowns
 - **Subtitle:** Your watch collection, sorted
-- **Promotional text:** Every watch you love, in one box. Save watches from Safari in seconds, or add them by hand. One price, no subscription.
+- **Promotional text:** The watch box that never runs out of slots. Save watches straight from Safari or add them by hand, and pay once with no subscription.
 - **Description:**
 
-  Every watch you love, in one box.
+  The watch box that never runs out of slots.
 
   Crowns keeps your collection and your wishlist beautifully in one place. Every watch you own, and every one you're after, laid out like a watch box in your pocket.
 
@@ -53,7 +53,7 @@ Export compliance: `ITSAppUsesNonExemptEncryption = NO` is already in the Info.p
 
 ## Screenshots
 
-Seven app screens, no onboarding. Captions (headline / line under it): "Every watch you love, in one box." / "Your collection and wishlist, side by side." · "Know every watch inside out." / "Photo, price and specs, all on one page." · "Seen one you like? Save it in seconds." / "Share from Safari. Crowns brings the details." · "See your wishlist at a glance." / "Every name and price in one tidy list." · "Your photos. Your details." / "Replace any photo and fine-tune every spec." · "An icon to suit your taste." / "Six finishes, from Green to Midnight Blue." · "Just as good after dark." / "Every watch looks its best in Dark Mode." The last sits on black. iPhone shots come from an iPhone Air (1206 × 2622 for the required 6.1"/6.3" slot, 1260 × 2736 for 6.9"); iPad shots from a 13" iPad Pro simulator (2064 × 2752). The watches are invented, so no brand's photos or marks appear.
+Seven app screens, no onboarding, captions written for collectors (from 1.0.1; 1.0's "in one box" line was wrong, as Crowns has many boxes). Headline / line under it: "The watch box that never runs out of slots" / "Wishlist, Collection, Grails, and as many boxes as you like" · "All the specs you'd check before buying" / "Case size, lug width, movement and price on one page" · "Save that grail before you lose the tab" / "Share any listing and Crowns pulls in photos, price and specs" · "Know what each grail will set you back" / "Switch to list view for names, references and prices" · "Swap the shop photo for your own wrist shot" / "And correct any spec the listing got wrong while you're there" · "Match the icon to your favourite dial" / "Green, Black, Midnight Blue, Burgundy, Chocolate and Purple" · "Made for those 1am watch-browsing sessions" / "Crowns follows your iPhone's Dark Mode setting". The last sits on black. iPhone shots come from an iPhone Air (1206 × 2622 for the required 6.1"/6.3" slot, 1260 × 2736 for 6.9"); iPad shots from a 13" iPad Pro simulator (2064 × 2752). The watches are invented, so no brand's photos or marks appear.
 
 ### Earlier plan (6.9")
 
